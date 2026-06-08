@@ -1,0 +1,11 @@
+node_modules
+.next
+out
+.env*
+!.env.example
+npm-debug.log*
+dev*.log
+qa-*.png
+desktop.png
+mobile.png
+.DS_Store

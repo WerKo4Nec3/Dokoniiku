@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f7f4ed;
+  --surface: #fffdf8;
+  --surface-muted: #ece9df;
+  --foreground: #1f2924;
+  --muted: #69736d;
+  --line: #d9d8cf;
+  --brand: #e8583e;
+  --brand-ink: #8c2d20;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #17211d;
+  --surface: #202c27;
+  --surface-muted: #2b3832;
+  --foreground: #f3f1e9;
+  --muted: #adb8b1;
+  --line: #3d4a44;
+  --brand: #ff775e;
+  --brand-ink: #ffd7cf;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  background: var(--background);
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    linear-gradient(rgba(40, 95, 77, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(40, 95, 77, 0.025) 1px, transparent 1px),
+    var(--background);
+  background-size: 28px 28px;
+  color: var(--foreground);
+  font-family:
+    "Hiragino Sans", "Yu Gothic UI", "Yu Gothic", "Noto Sans JP",
+    system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 3px solid #f2c14e;
+  outline-offset: 3px;
+}
+
+::selection {
+  background: #f2c14e;
+  color: #1f2924;
+}
+
+.surface {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.hero-image {
+  background-image:
+    linear-gradient(
+      90deg,
+      rgba(247, 244, 237, 0.98) 0%,
+      rgba(247, 244, 237, 0.92) 38%,
+      rgba(247, 244, 237, 0.15) 72%
+    ),
+    url("/travel-backdrop.png");
+  background-position: center;
+  background-size: cover;
+}
+
+.dark .hero-image {
+  background-image:
+    linear-gradient(
+      90deg,
+      rgba(23, 33, 29, 0.98) 0%,
+      rgba(23, 33, 29, 0.9) 42%,
+      rgba(23, 33, 29, 0.28) 76%
+    ),
+    url("/travel-backdrop.png");
+}
+
+@media (max-width: 720px) {
+  .hero-image {
+    background-image:
+      linear-gradient(
+        180deg,
+        rgba(247, 244, 237, 0.32) 0%,
+        rgba(247, 244, 237, 0.9) 56%,
+        rgba(247, 244, 237, 1) 100%
+      ),
+      url("/travel-backdrop.png");
+    background-position: 62% center;
+  }
+
+  .dark .hero-image {
+    background-image:
+      linear-gradient(
+        180deg,
+        rgba(23, 33, 29, 0.22) 0%,
+        rgba(23, 33, 29, 0.88) 56%,
+        rgba(23, 33, 29, 1) 100%
+      ),
+      url("/travel-backdrop.png");
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
