@@ -3,9 +3,12 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
+  Bike,
+  Car,
   Cloud,
   CloudRain,
   ExternalLink,
+  Footprints,
   House,
   Info,
   LocateFixed,
@@ -17,8 +20,10 @@ import {
   Sun,
   Ticket,
   TrainFront,
+  Users,
   Utensils,
   WalletCards,
+  Wand2,
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
@@ -33,6 +38,8 @@ import {
   subscribeStartPoint,
 } from "@/lib/storage/startPoint";
 import {
+  allTransportModes,
+  bestTransport,
   categoryLabels,
   estimateBudget,
   estimateTravelTime,
@@ -44,13 +51,17 @@ import {
   pickDirection,
   pickPrefecture,
   randomItem,
+  transportInfo,
+  transportLabel,
 } from "@/lib/utils/travel";
 import type {
+  Destination,
   DestinationCategory,
   Direction,
   JourneyResult,
   Prefecture,
   StartPoint,
+  TransportMode,
   WeatherInfo,
 } from "@/types";
 import { ActionButton } from "@/components/ui/ActionButton";
@@ -59,8 +70,37 @@ import { JourneySkeleton } from "./JourneySkeleton";
 import { ProgressRail } from "./ProgressRail";
 
 type Stage = "landing" | "direction" | "prefecture" | "loading" | "result";
+type JourneyMode = "surprise" | "custom";
+type TripLengthId = "day" | "one-night" | "two-night";
 
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
+
+// Trip length → how long one-way travel may take (round trip is double).
+const tripLengthOptions: {
+  id: TripLengthId;
+  labelJa: string;
+  maxOneWayMinutes: number;
+}[] = [
+  { id: "day", labelJa: "日帰り", maxOneWayMinutes: 180 },
+  { id: "one-night", labelJa: "1泊2日", maxOneWayMinutes: 360 },
+  { id: "two-night", labelJa: "2泊3日", maxOneWayMinutes: 600 },
+];
+
+const transportIcons: Record<
+  TransportMode,
+  typeof Footprints
+> = {
+  walk: Footprints,
+  bicycle: Bike,
+  motorbike: Bike,
+  car: Car,
+  train: TrainFront,
+  shinkansen: TrainFront,
+};
+
+const BUDGET_MIN = 5000;
+const BUDGET_MAX = 100000;
+const DISTANCE_MAX = 800;
 
 const directionAngles: Record<Direction, number> = {
   北: 0,
@@ -91,6 +131,19 @@ function WeatherIcon({ weather }: { weather: WeatherInfo }) {
   return <Icon className="text-sky" size={28} aria-hidden="true" />;
 }
 
+function TransportIcon({
+  mode,
+  className,
+  size = 21,
+}: {
+  mode: TransportMode;
+  className?: string;
+  size?: number;
+}) {
+  const Icon = transportIcons[mode];
+  return <Icon size={size} className={className} aria-hidden="true" />;
+}
+
 export function JourneyExperience() {
   const [stage, setStage] = useState<Stage>("landing");
   const [direction, setDirection] = useState<Direction | null>(null);
@@ -105,6 +158,19 @@ export function JourneyExperience() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
   const [scope, setScope] = useState<"nearby" | "all">("nearby");
+  const [people, setPeople] = useState(1);
+
+  // "Подбор с настройками" (custom) mode.
+  const [journeyMode, setJourneyMode] = useState<JourneyMode>("surprise");
+  const [budget, setBudget] = useState(30000);
+  const [tripLength, setTripLength] = useState<TripLengthId>("day");
+  const [maxDistance, setMaxDistance] = useState(200);
+  const [transports, setTransports] = useState<TransportMode[]>([
+    "train",
+    "car",
+    "shinkansen",
+  ]);
+  const [allowTransfer, setAllowTransfer] = useState(false);
 
   const startSnapshot = useSyncExternalStore(
     subscribeStartPoint,
@@ -160,6 +226,25 @@ export function JourneyExperience() {
     setSelectedCategories([]);
   }
 
+  function toggleTransport(mode: TransportMode) {
+    setTransports((current) =>
+      current.includes(mode)
+        ? current.filter((item) => item !== mode)
+        : [...current, mode],
+    );
+  }
+
+  const maxOneWayMinutes =
+    tripLengthOptions.find((option) => option.id === tripLength)
+      ?.maxOneWayMinutes ?? 180;
+
+  const chipClass = (active: boolean) =>
+    `rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+      active
+        ? "border-vermilion bg-vermilion/10 text-vermilion"
+        : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+    }`;
+
   function beginDirectionSelection() {
     setStage("direction");
     setDirection(null);
@@ -187,13 +272,20 @@ export function JourneyExperience() {
 
   function choosePrefecture() {
     if (!direction) return;
-    const pool =
-      scope === "all"
-        ? prefectures
-        : prefectures.filter(
-            (item) =>
-              haversineDistanceKm(start, item) <= NEARBY_PREFECTURE_LIMIT_KM,
-          );
+    let pool: Prefecture[];
+    if (journeyMode === "custom") {
+      // Custom: keep prefectures within the chosen max distance.
+      pool = prefectures.filter(
+        (item) => haversineDistanceKm(start, item) <= maxDistance,
+      );
+    } else if (scope === "all") {
+      pool = prefectures;
+    } else {
+      pool = prefectures.filter(
+        (item) =>
+          haversineDistanceKm(start, item) <= NEARBY_PREFECTURE_LIMIT_KM,
+      );
+    }
     const next = pickPrefecture(direction, start, pool);
     setPrefecture(next);
     setFilterNotice(null);
@@ -218,18 +310,64 @@ export function JourneyExperience() {
       return;
     }
 
+    const isCustom = journeyMode === "custom";
+    const usableModes: TransportMode[] = transports.length
+      ? transports
+      : ["train"];
+
+    // Each plan pairs a destination with the transport it will use.
+    type Plan = { destination: Destination; transport: TransportMode };
+    let plans: Plan[];
+
+    if (isCustom) {
+      plans = [];
+      for (const candidate of candidates) {
+        const distance = haversineDistanceKm(start, candidate);
+        if (distance > maxDistance) continue;
+        const best = bestTransport({
+          distanceKm: distance,
+          categories: candidate.categories,
+          people,
+          modes: usableModes,
+          transfer: allowTransfer,
+          maxBudget: budget,
+          maxOneWayMinutes,
+        });
+        if (!best) continue;
+        plans.push({ destination: candidate, transport: best.mode });
+      }
+
+      if (!plans.length) {
+        setFilterNotice(
+          "設定した予算・時間・距離・移動手段に合う場所が見つかりませんでした。条件をゆるめるか、メインに戻って別の方角を試してね。",
+        );
+        setFiltersOpen(true);
+        setStage("prefecture");
+        return;
+      }
+    } else {
+      plans = candidates.map((candidate) => ({
+        destination: candidate,
+        transport: "train" as TransportMode,
+      }));
+    }
+
     // When re-rolling, avoid showing the same place twice in a row.
-    let pool = candidates;
-    if (journey && candidates.length > 1) {
-      const others = candidates.filter(
-        (item) => item.id !== journey.destination.id,
+    let pool = plans;
+    if (journey && plans.length > 1) {
+      const others = plans.filter(
+        (plan) => plan.destination.id !== journey.destination.id,
       );
       if (others.length) pool = others;
     }
 
     setStage("loading");
     const startedAt = Date.now();
-    const picked = randomItem(pool);
+    const chosen = randomItem(pool);
+    const picked = chosen.destination;
+    const transport = chosen.transport;
+    const transfer = isCustom ? allowTransfer : false;
+
     const [weather, summary] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
       getDestinationSummary(picked.name),
@@ -241,8 +379,14 @@ export function JourneyExperience() {
           imageUrl: summary.imageUrl ?? picked.imageUrl,
         }
       : picked;
-    const travel = estimateTravelTime(destination, start);
-    const budget = estimateBudget(travel.distanceKm, destination.categories);
+    const travel = estimateTravelTime(destination, start, transport, transfer);
+    const budgetResult = estimateBudget(
+      travel.distanceKm,
+      destination.categories,
+      people,
+      transport,
+      transfer,
+    );
     const minimumWait = Math.max(0, 1100 - (Date.now() - startedAt));
     await new Promise((resolve) => window.setTimeout(resolve, minimumWait));
 
@@ -257,9 +401,12 @@ export function JourneyExperience() {
       prefecture,
       destination,
       weather: weather.data,
-      estimatedBudget: budget,
+      estimatedBudget: budgetResult,
       estimatedTravelTime: travel.minutes,
       distanceKm: travel.distanceKm,
+      people,
+      transport,
+      transfer,
       isMock: places.provider === "mock" || weather.provider === "mock",
     });
     setNotice([places.notice, weather.notice].filter(Boolean).join(" "));
@@ -408,36 +555,195 @@ export function JourneyExperience() {
               )}
             </div>
 
+            <div className="mt-3 inline-flex items-center gap-3 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-1.5">
+              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)]">
+                <Users size={14} />
+                人数
+              </span>
+              <div className="inline-flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPeople((n) => Math.max(1, n - 1))}
+                  disabled={people <= 1}
+                  aria-label="人数を減らす"
+                  className="grid h-6 w-6 place-items-center rounded-full border border-[color:var(--line)] text-sm font-black text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)] disabled:opacity-40"
+                >
+                  −
+                </button>
+                <span className="min-w-6 text-center text-sm font-black tabular-nums">
+                  {people}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPeople((n) => Math.min(20, n + 1))}
+                  disabled={people >= 20}
+                  aria-label="人数を増やす"
+                  className="grid h-6 w-6 place-items-center rounded-full border border-[color:var(--line)] text-sm font-black text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)] disabled:opacity-40"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
             <div className="mt-4 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1">
               <button
                 type="button"
-                onClick={() => setScope("nearby")}
-                className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                  scope === "nearby"
+                onClick={() => setJourneyMode("surprise")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                  journeyMode === "surprise"
                     ? "bg-vermilion text-white"
                     : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
                 }`}
               >
-                近場で探す
+                <Wand2 size={13} />
+                驚かせて
               </button>
               <button
                 type="button"
-                onClick={() => setScope("all")}
-                className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                  scope === "all"
+                onClick={() => setJourneyMode("custom")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                  journeyMode === "custom"
                     ? "bg-vermilion text-white"
                     : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
                 }`}
               >
-                全国から探す
+                <SlidersHorizontal size={13} />
+                設定して探す
               </button>
             </div>
 
-            <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
-              {scope === "nearby"
-                ? "出発地から日帰りで行ける範囲で、行き先をランダムに提案します"
-                : "全国47都道府県から、行き先をランダムに提案します"}
-            </p>
+            {journeyMode === "surprise" ? (
+              <>
+                <div className="mt-3 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1">
+                  <button
+                    type="button"
+                    onClick={() => setScope("nearby")}
+                    className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                      scope === "nearby"
+                        ? "bg-vermilion text-white"
+                        : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                    }`}
+                  >
+                    近場で探す
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setScope("all")}
+                    className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+                      scope === "all"
+                        ? "bg-vermilion text-white"
+                        : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                    }`}
+                  >
+                    全国から探す
+                  </button>
+                </div>
+                <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
+                  {scope === "nearby"
+                    ? "出発地から日帰りで行ける範囲で、行き先をランダムに提案します"
+                    : "全国47都道府県から、行き先をランダムに提案します"}
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mt-4 w-full max-w-md rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 text-left">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-[color:var(--muted)]">
+                      予算（{people}名・上限）
+                    </span>
+                    <span className="text-xs font-black">{formatYen(budget)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={BUDGET_MIN}
+                    max={BUDGET_MAX}
+                    step={1000}
+                    value={budget}
+                    onChange={(event) => setBudget(Number(event.target.value))}
+                    className="mt-2 w-full accent-vermilion"
+                  />
+
+                  <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
+                    旅の日数（移動できる時間）
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {tripLengthOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setTripLength(option.id)}
+                        className={chipClass(tripLength === option.id)}
+                      >
+                        {option.labelJa}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-xs font-bold text-[color:var(--muted)]">
+                      出発地からの距離（上限）
+                    </span>
+                    <span className="text-xs font-black">約{maxDistance}km</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={5}
+                    max={DISTANCE_MAX}
+                    step={5}
+                    value={maxDistance}
+                    onChange={(event) => setMaxDistance(Number(event.target.value))}
+                    className="mt-2 w-full accent-vermilion"
+                  />
+
+                  <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
+                    移動手段（複数選択可）
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {allTransportModes.map((mode) => {
+                      const Icon = transportIcons[mode];
+                      return (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => toggleTransport(mode)}
+                          className={`inline-flex items-center gap-1.5 ${chipClass(
+                            transports.includes(mode),
+                          )}`}
+                        >
+                          <Icon size={13} />
+                          {transportInfo[mode].labelJa}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between gap-3">
+                    <span className="text-xs font-bold text-[color:var(--muted)]">
+                      乗り継ぎ（最後にタクシー等）を許可
+                    </span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={allowTransfer}
+                      aria-label="乗り継ぎを許可"
+                      onClick={() => setAllowTransfer((value) => !value)}
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition ${
+                        allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+                          allowTransfer ? "left-[18px]" : "left-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+                <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
+                  予算・時間・距離・移動手段に合う行き先だけを提案します
+                </p>
+              </>
+            )}
           </div>
         </motion.section>
       )}
@@ -630,7 +936,11 @@ export function JourneyExperience() {
                 {journey.prefecture.nameJa} ・ {journey.distanceKm}km
               </p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-vermilion/10 px-3 py-1.5 text-xs font-bold text-vermilion">
+                <TransportIcon mode={journey.transport} size={14} />
+                {transportLabel(journey.transport, journey.transfer)}
+              </span>
               {journey.destination.categories.map((category) => (
                 <span
                   key={category}
@@ -716,7 +1026,10 @@ export function JourneyExperience() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-                  <TrainFront size={21} className="text-forest dark:text-[#8fd0b9]" />
+                  <TransportIcon
+                    mode={journey.transport}
+                    className="text-forest dark:text-[#8fd0b9]"
+                  />
                   <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
                     片道の所要時間
                   </p>
@@ -724,7 +1037,7 @@ export function JourneyExperience() {
                     {formatMinutes(journey.estimatedTravelTime)}
                   </p>
                   <p className="mt-2 text-[10px] text-[color:var(--muted)]">
-                    距離から算出した目安
+                    {transportLabel(journey.transport, journey.transfer)}での目安
                   </p>
                 </div>
                 <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
@@ -739,13 +1052,22 @@ export function JourneyExperience() {
                     {formatYen(journey.estimatedBudget.total)}
                   </p>
                   <p className="mt-2 text-[10px] text-[color:var(--muted)]">
-                    日帰り・1名分
+                    {journey.people}名・日帰り合計
+                    {journey.people > 1 &&
+                      `（1名あたり約${formatYen(
+                        Math.round(journey.estimatedBudget.total / journey.people),
+                      )}）`}
                   </p>
                 </div>
               </div>
 
               <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-                <h3 className="text-sm font-black">費用の内訳</h3>
+                <h3 className="text-sm font-black">
+                  費用の内訳
+                  <span className="ml-1.5 text-xs font-bold text-[color:var(--muted)]">
+                    （{journey.people}名分）
+                  </span>
+                </h3>
                 <dl className="mt-4 space-y-3 text-sm">
                   <div className="flex items-center justify-between">
                     <dt className="flex items-center gap-2 text-[color:var(--muted)]">

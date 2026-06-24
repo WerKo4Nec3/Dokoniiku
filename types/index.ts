@@ -44,6 +44,14 @@ export type Destination = Coordinates & {
   imageUrl?: string;
 };
 
+export type TransportMode =
+  | "walk"
+  | "bicycle"
+  | "motorbike"
+  | "car"
+  | "train"
+  | "shinkansen";
+
 export type WeatherInfo = {
   temperature: number;
   description: string;
@@ -76,5 +84,8 @@ export type JourneyResult = {
   estimatedBudget: EstimatedBudget;
   estimatedTravelTime: number;
   distanceKm: number;
+  people: number;
+  transport: TransportMode;
+  transfer: boolean;
   isMock: boolean;
 };

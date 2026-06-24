@@ -6,18 +6,23 @@ import type {
   Direction,
   EstimatedBudget,
   Prefecture,
+  TransportMode,
 } from "@/types";
 
-const compassOrder: Direction[] = [
-  "北",
-  "北東",
-  "東",
-  "南東",
-  "南",
-  "南西",
-  "西",
-  "北西",
-];
+const directionAngle: Record<Direction, number> = {
+  北: 0,
+  北東: 45,
+  東: 90,
+  南東: 135,
+  南: 180,
+  南西: 225,
+  西: 270,
+  北西: 315,
+};
+
+// How strictly a candidate must match the chosen compass direction
+// (max degrees of deviation from the exact bearing).
+const DIRECTION_TOLERANCE_DEG = 22.5;
 
 const activityRanges: Record<DestinationCategory, [number, number]> = {
   nature: [0, 500],
@@ -37,7 +42,7 @@ export function pickDirection(): Direction {
   return randomItem(directions);
 }
 
-export function directionFrom(from: Coordinates, to: Coordinates): Direction {
+export function bearingDegrees(from: Coordinates, to: Coordinates): number {
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const lat1 = toRadians(from.latitude);
   const lat2 = toRadians(to.latitude);
@@ -46,21 +51,14 @@ export function directionFrom(from: Coordinates, to: Coordinates): Direction {
   const x =
     Math.cos(lat1) * Math.sin(lat2) -
     Math.sin(lat1) * Math.cos(lat2) * Math.cos(deltaLon);
-  const bearing = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 
-  return compassOrder[Math.round(bearing / 45) % 8];
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-const nearbyDirections: Record<Direction, Direction[]> = {
-  北: ["北東", "北西"],
-  南: ["南東", "南西"],
-  東: ["北東", "南東"],
-  西: ["北西", "南西"],
-  北東: ["北", "東"],
-  北西: ["北", "西"],
-  南東: ["南", "東"],
-  南西: ["南", "西"],
-};
+function angularDifference(a: number, b: number): number {
+  const diff = Math.abs(a - b) % 360;
+  return diff > 180 ? 360 - diff : diff;
+}
 
 // Prefectures within this distance from the start point count as a
 // "nearby" (day-trip friendly) option.
@@ -72,18 +70,20 @@ export function pickPrefecture(
   pool: Prefecture[] = prefectures,
 ): Prefecture {
   const list = pool.length ? pool : prefectures;
+  const target = directionAngle[direction];
+  const scored = list.map((prefecture) => ({
+    prefecture,
+    diff: angularDifference(bearingDegrees(start, prefecture), target),
+  }));
 
-  const exact = list.filter(
-    (prefecture) => directionFrom(start, prefecture) === direction,
-  );
-  if (exact.length > 0) return randomItem(exact);
+  // Strict: keep only prefectures genuinely in the chosen direction.
+  const within = scored.filter((item) => item.diff <= DIRECTION_TOLERANCE_DEG);
+  if (within.length > 0) return randomItem(within).prefecture;
 
-  const nearby = list.filter((prefecture) =>
-    nearbyDirections[direction].includes(directionFrom(start, prefecture)),
-  );
-  if (nearby.length > 0) return randomItem(nearby);
-
-  return randomItem(list);
+  // None within tolerance: take the single closest by bearing, so e.g.
+  // "South" never jumps to East — it picks the most southward option.
+  return scored.reduce((best, item) => (item.diff < best.diff ? item : best))
+    .prefecture;
 }
 
 export function haversineDistanceKm(
@@ -103,32 +103,98 @@ export function haversineDistanceKm(
   return Math.round(radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
+export const transportInfo: Record<
+  TransportMode,
+  {
+    labelJa: string;
+    speedKmh: number;
+    yenPerKm: number;
+    perPerson: boolean; // fare charged per person (public transit) vs per vehicle
+    overheadMin: number;
+  }
+> = {
+  walk: { labelJa: "徒歩", speedKmh: 4.5, yenPerKm: 0, perPerson: false, overheadMin: 0 },
+  bicycle: { labelJa: "自転車", speedKmh: 14, yenPerKm: 0, perPerson: false, overheadMin: 0 },
+  motorbike: { labelJa: "バイク", speedKmh: 35, yenPerKm: 12, perPerson: false, overheadMin: 10 },
+  car: { labelJa: "車", speedKmh: 45, yenPerKm: 20, perPerson: false, overheadMin: 10 },
+  train: { labelJa: "電車", speedKmh: 55, yenPerKm: 22, perPerson: true, overheadMin: 20 },
+  shinkansen: { labelJa: "新幹線", speedKmh: 160, yenPerKm: 38, perPerson: true, overheadMin: 25 },
+};
+
+export const allTransportModes: TransportMode[] = [
+  "walk",
+  "bicycle",
+  "motorbike",
+  "car",
+  "train",
+  "shinkansen",
+];
+
+// A transfer adds a last-mile taxi leg, only meaningful for rail trips.
+function transferApplies(transport: TransportMode, transfer: boolean): boolean {
+  return transfer && (transport === "train" || transport === "shinkansen");
+}
+
+function travelMinutes(
+  distanceKm: number,
+  transport: TransportMode,
+  transfer: boolean,
+): number {
+  const info = transportInfo[transport];
+  let minutes = (distanceKm / info.speedKmh) * 60 + info.overheadMin;
+  if (transferApplies(transport, transfer)) minutes += 20; // last-mile taxi
+  return Math.max(15, Math.round(minutes));
+}
+
 export function estimateTravelTime(
   destination: Destination,
   start: Coordinates,
+  transport: TransportMode = "train",
+  transfer: boolean = false,
 ): {
   distanceKm: number;
   minutes: number;
 } {
   const distanceKm = haversineDistanceKm(start, destination);
-  return {
-    distanceKm,
-    minutes: Math.max(35, Math.round((distanceKm / 45) * 60 + 20)),
-  };
+  return { distanceKm, minutes: travelMinutes(distanceKm, transport, transfer) };
 }
 
 function roundToHundred(value: number) {
   return Math.round(value / 100) * 100;
 }
 
+function transportCostFor(
+  distanceKm: number,
+  people: number,
+  transport: TransportMode,
+  transfer: boolean,
+): number {
+  const headcount = Math.max(1, Math.round(people));
+  const info = transportInfo[transport];
+  let cost = roundToHundred(distanceKm * info.yenPerKm * 2); // round trip
+  if (info.perPerson) cost *= headcount;
+  if (info.yenPerKm > 0) {
+    cost = Math.max(info.perPerson ? 300 * headcount : 600, cost);
+  }
+  if (transferApplies(transport, transfer)) cost += 3000; // taxi round trip (group)
+  return cost;
+}
+
 export function estimateBudget(
   distanceKm: number,
   categories: DestinationCategory[],
+  people: number = 1,
+  transport: TransportMode = "train",
+  transfer: boolean = false,
 ): EstimatedBudget {
-  const transportCost = Math.max(600, roundToHundred(distanceKm * 24 * 2));
+  const headcount = Math.max(1, Math.round(people));
   const [minimum, maximum] = activityRanges[categories[0] ?? "nature"];
-  const activityCost = roundToHundred((minimum + maximum) / 2);
-  const foodCost = 1200;
+  const perActivity = roundToHundred((minimum + maximum) / 2);
+  const perFood = 1200;
+
+  const transportCost = transportCostFor(distanceKm, headcount, transport, transfer);
+  const activityCost = perActivity * headcount;
+  const foodCost = perFood * headcount;
 
   return {
     transportCost,
@@ -138,11 +204,44 @@ export function estimateBudget(
   };
 }
 
+// From the allowed transport modes, pick the cheapest option that fits both
+// the time budget and the money budget. Returns null if nothing fits.
+export function bestTransport(opts: {
+  distanceKm: number;
+  categories: DestinationCategory[];
+  people: number;
+  modes: TransportMode[];
+  transfer: boolean;
+  maxBudget: number;
+  maxOneWayMinutes: number;
+}): { mode: TransportMode; minutes: number; total: number } | null {
+  let best: { mode: TransportMode; minutes: number; total: number } | null = null;
+  for (const mode of opts.modes) {
+    const minutes = travelMinutes(opts.distanceKm, mode, opts.transfer);
+    if (minutes > opts.maxOneWayMinutes) continue;
+    const total = estimateBudget(
+      opts.distanceKm,
+      opts.categories,
+      opts.people,
+      mode,
+      opts.transfer,
+    ).total;
+    if (total > opts.maxBudget) continue;
+    if (!best || total < best.total) best = { mode, minutes, total };
+  }
+  return best;
+}
+
 export function formatMinutes(minutes: number) {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   if (!hours) return `約${remainingMinutes}分`;
   return `約${hours}時間${remainingMinutes ? `${remainingMinutes}分` : ""}`;
+}
+
+export function transportLabel(transport: TransportMode, transfer: boolean) {
+  const base = transportInfo[transport].labelJa;
+  return transferApplies(transport, transfer) ? `${base}＋タクシー` : base;
 }
 
 export function googleMapsSearchUrl(

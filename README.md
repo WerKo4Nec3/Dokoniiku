@@ -13,16 +13,20 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 ## Features
 
 - Animated three-step journey selection
+- Two journey modes: "Surprise me" (fully random) and "Custom" (filtered by budget, time, distance, and transport)
 - Original SVG mascot with mood-based Framer Motion animation
-- Internal prefecture metadata with direction-based selection from a user-selectable starting point (current location or a preset list of major cities)
-- Wikipedia-powered attraction search (geosearch) with automatic mock fallback
+- All 47 prefectures, with a "nearby (day-trip range) / nationwide" scope toggle in Surprise mode
+- Bearing-based direction selection from a user-selectable starting point (current location or a preset list of major cities), strictly matched to the chosen compass direction
+- Party size selector, with the budget totalled for the whole group
+- Custom mode: budget cap, trip length (day / 1-night / 2-night), max distance, and transport selection (walk, bicycle, motorbike, car, train, shinkansen) with an optional last-mile transfer (taxi); the chosen transport is shown on the result
+- Wikipedia-powered attraction search (geosearch, plus per-prefecture category search when a genre is selected) with automatic mock fallback
 - Wikipedia article summaries and photos enrich each destination's description, with a templated fallback when no article is found
 - Optional category filter applied at the prefecture step
 - Re-roll the destination within the same direction and prefecture (without repeating the current place), or return to the main menu to start over
 - OpenWeather current conditions with automatic mock fallback
-- One-tap link to open the destination directly in Google Maps
-- Distance-based travel time estimate
-- Category-based day-trip budget estimate
+- One-tap link to open the destination directly in Google Maps (centred on the exact coordinates)
+- Transport-aware travel time estimate
+- Category-based budget estimate
 - Light and dark themes persisted in `localStorage`
 - Loading, empty, error-fallback, and mock-mode states
 - Responsive mobile-first interface
@@ -61,19 +65,19 @@ Wikipedia's APIs are free, keyless, and CORS-enabled, so attraction search and d
 
 ## Estimation Logic
 
-Travel distance uses the Haversine formula from Kobe-Sannomiya. The MVP time estimate is:
+Travel distance uses the Haversine formula from the chosen starting point. Travel time depends on the transport mode (its speed plus a boarding overhead, and an extra leg when a last-mile transfer is allowed):
 
 ```text
-minutes = round(distanceKm / 45 * 60 + 20)
+minutes = round(distanceKm / speed(mode) * 60 + overhead(mode))
 ```
 
-Budget is the sum of:
+Budget (totalled for the whole party) is the sum of:
 
-- Round-trip transport: distance-based and rounded to the nearest ¥100
-- Activity: category-based midpoint
-- Food: fixed ¥1,200
+- Round-trip transport: distance × per-km cost of the transport mode, rounded to the nearest ¥100; charged per person for public transit, per vehicle otherwise, plus a fixed taxi leg when a transfer is allowed
+- Activity: category-based midpoint, per person
+- Food: fixed ¥1,200 per person
 
-All values are explicitly presented as estimates, not real fare claims.
+In Custom mode, only destinations whose best feasible transport fits the budget, trip length, and max distance are offered. All values are explicitly presented as estimates, not real fare claims.
 
 ## Run Locally
 
