@@ -38,7 +38,7 @@ export async function POST(request: Request) {
     ? body.categories.join("、")
     : "";
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash";
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
   const prompt = `あなたは日本の旅の精「タビ」です。次の場所について、旅行者向けに親しみやすい日本語で2〜3文（120〜180文字程度）で紹介してください。見どころ・おすすめの過ごし方・季節やひとことアドバイスを含め、誇張や不確かな事実は避けてください。マークダウンや箇条書きは使わず、文章で書いてください。\n場所: ${name}${prefecture ? `（${prefecture}）` : ""}${categories ? `\nジャンル: ${categories}` : ""}`;
 
   try {
@@ -49,7 +49,13 @@ export async function POST(request: Request) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 400 },
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 512,
+            // gemini-2.5-flash "thinks" by default, which eats the output
+            // budget; disable it for this short, simple blurb.
+            thinkingConfig: { thinkingBudget: 0 },
+          },
         }),
       },
     );
