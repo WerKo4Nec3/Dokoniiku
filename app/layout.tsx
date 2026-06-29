@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 export const metadata: Metadata = {
   title: "旅コンパス | Tabi Compass",
@@ -39,8 +40,10 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        <AppHeader />
-        <main>{children}</main>
+        <AuthProvider>
+          <AppHeader />
+          <main>{children}</main>
+        </AuthProvider>
         <ServiceWorkerRegister />
       </body>
     </html>

@@ -28,7 +28,9 @@ import {
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
+import { useAuth } from "@/lib/auth/AuthProvider";
 import { getAttractionsByPrefecture } from "@/lib/api/places";
+import { saveJourneyForUser } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { getDestinationSummary } from "@/lib/api/wikipedia";
 import {
@@ -171,6 +173,8 @@ export function JourneyExperience() {
     "shinkansen",
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
+
+  const { user } = useAuth();
 
   const startSnapshot = useSyncExternalStore(
     subscribeStartPoint,
@@ -390,7 +394,7 @@ export function JourneyExperience() {
     const minimumWait = Math.max(0, 1100 - (Date.now() - startedAt));
     await new Promise((resolve) => window.setTimeout(resolve, minimumWait));
 
-    setJourney({
+    const result: JourneyResult = {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
           ? crypto.randomUUID()
@@ -408,9 +412,17 @@ export function JourneyExperience() {
       transport,
       transfer,
       isMock: places.provider === "mock" || weather.provider === "mock",
-    });
+    };
+    setJourney(result);
     setNotice([places.notice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
+
+    // Auto-save every generated place to the signed-in user's account.
+    if (user) {
+      saveJourneyForUser(user.uid, result).catch(() => {
+        // Saving is best-effort; never block the result on a write failure.
+      });
+    }
   }
 
   const filtersActive = selectedCategories.length > 0;

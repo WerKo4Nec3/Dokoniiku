@@ -100,6 +100,21 @@ NEXT_PUBLIC_OPENWEATHER_API_KEY=
 
 Attraction search and destination descriptions use Wikipedia's free, keyless APIs and need no configuration. Without an OpenWeather key the app shows demo weather instead of live conditions.
 
+### Accounts (optional, Firebase)
+
+Sign-in and cloud-saved places are optional. Set the Firebase web config to enable Google sign-in (Firebase Authentication) and per-user journey storage (Cloud Firestore):
+
+```bash
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+```
+
+These are public web-config values, not secrets. When set, signed-in users get a Google login and every generated journey is auto-saved to their account (viewable on `/saved`). When blank, the app runs exactly as before, with the account UI hidden.
+
 ## Future Improvements
 
 - Route provider for real transit duration and fares
