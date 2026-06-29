@@ -29,6 +29,7 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - Category-based budget estimate
 - Local history of the last five generated places on the landing screen
 - Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list
+- Optional AI place insight (Gemini) via a server-side route, surfaced as an "ask AI" button on the result
 - Light and dark themes persisted in `localStorage`
 - Loading, empty, error-fallback, and mock-mode states
 - Responsive mobile-first interface
@@ -116,6 +117,18 @@ NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
 These are public web-config values, not secrets. When set, signed-in users get a Google login and a "save" button to keep a journey in their account (viewable on `/saved`). When blank, the app runs exactly as before, with the account UI hidden. The last five generated places are always kept in a local history on the landing screen, regardless of sign-in.
+
+### AI place insight (optional, Gemini)
+
+A richer, AI-written blurb about the destination is available behind a server-side route (`/api/place-insight`), so the API key stays on the server:
+
+```bash
+GEMINI_API_KEY=          # real secret — server-only, never NEXT_PUBLIC
+GEMINI_MODEL=gemini-2.0-flash
+NEXT_PUBLIC_GEMINI_ENABLED=true   # shows the "ask AI" button
+```
+
+`GEMINI_API_KEY` is read only inside the route handler and is never sent to the browser. Without these set, the AI button is hidden and the route returns `503`.
 
 ## Future Improvements
 

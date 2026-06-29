@@ -113,6 +113,9 @@ const BUDGET_MIN = 5000;
 const BUDGET_MAX = 100000;
 const DISTANCE_MAX = 800;
 
+// Gemini-powered place insight is optional; the UI only appears when enabled.
+const aiEnabled = process.env.NEXT_PUBLIC_GEMINI_ENABLED === "true";
+
 const directionAngles: Record<Direction, number> = {
   北: 0,
   北東: 45,
@@ -183,6 +186,8 @@ export function JourneyExperience() {
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   const { user, enabled: authEnabled, signInWithGoogle } = useAuth();
 
@@ -432,11 +437,39 @@ export function JourneyExperience() {
     };
     setJourney(result);
     setSavedJourneyId(null);
+    setAiText(null);
     setNotice([places.notice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
 
     // Keep a short local history of the last few generated places.
     pushRecentJourney(result);
+  }
+
+  async function handleAskAi() {
+    if (!journey || aiLoading) return;
+    setAiLoading(true);
+    setAiText(null);
+    try {
+      const response = await fetch("/api/place-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: journey.destination.name,
+          prefecture: journey.prefecture.nameJa,
+          categories: journey.destination.categories,
+        }),
+      });
+      const data = await response.json();
+      setAiText(
+        response.ok && data.text
+          ? (data.text as string)
+          : "AIの情報を取得できませんでした。少し時間をおいて試してみてね。",
+      );
+    } catch {
+      setAiText("AIの情報を取得できませんでした。少し時間をおいて試してみてね。");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   async function handleSaveCurrent() {
@@ -454,6 +487,7 @@ export function JourneyExperience() {
     setPrefecture(item.prefecture);
     setJourney(item);
     setSavedJourneyId(null);
+    setAiText(null);
     setNotice(null);
     setFilterNotice(null);
     setStage("result");
@@ -1052,6 +1086,41 @@ export function JourneyExperience() {
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
                 </p>
+
+                {aiEnabled && (
+                  <div className="mt-4 border-t border-[color:var(--line)] pt-4">
+                    {!aiText && (
+                      <button
+                        type="button"
+                        onClick={handleAskAi}
+                        disabled={aiLoading}
+                        className="inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+                      >
+                        <Sparkles size={14} />
+                        {aiLoading ? "タビが調べています…" : "タビにAIでもっと聞く"}
+                      </button>
+                    )}
+                    {aiText && (
+                      <div className="flex items-start gap-2">
+                        <Sparkles
+                          size={16}
+                          className="mt-0.5 shrink-0 text-forest dark:text-[#8fd0b9]"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-[color:var(--muted)]">
+                            タビのAIガイド
+                          </p>
+                          <p className="mt-1 text-sm font-medium leading-7 text-[color:var(--foreground)]">
+                            {aiText}
+                          </p>
+                          <p className="mt-2 text-[10px] text-[color:var(--muted)]">
+                            AIによる生成のため、内容が不正確な場合があります。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
