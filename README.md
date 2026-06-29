@@ -27,6 +27,8 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - One-tap link to open the destination directly in Google Maps (centred on the exact coordinates)
 - Transport-aware travel time estimate
 - Category-based budget estimate
+- Local history of the last five generated places on the landing screen
+- Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list
 - Light and dark themes persisted in `localStorage`
 - Loading, empty, error-fallback, and mock-mode states
 - Responsive mobile-first interface
@@ -113,7 +115,7 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
-These are public web-config values, not secrets. When set, signed-in users get a Google login and every generated journey is auto-saved to their account (viewable on `/saved`). When blank, the app runs exactly as before, with the account UI hidden.
+These are public web-config values, not secrets. When set, signed-in users get a Google login and a "save" button to keep a journey in their account (viewable on `/saved`). When blank, the app runs exactly as before, with the account UI hidden. The last five generated places are always kept in a local history on the landing screen, regardless of sign-in.
 
 ## Future Improvements
 

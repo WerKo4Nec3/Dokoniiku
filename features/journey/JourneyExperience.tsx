@@ -4,7 +4,10 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowRight,
   Bike,
+  Bookmark,
   Car,
+  Check,
+  ChevronRight,
   Cloud,
   CloudRain,
   ExternalLink,
@@ -33,6 +36,12 @@ import { getAttractionsByPrefecture } from "@/lib/api/places";
 import { saveJourneyForUser } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { getDestinationSummary } from "@/lib/api/wikipedia";
+import {
+  getRecentSnapshot,
+  parseRecentSnapshot,
+  pushRecentJourney,
+  subscribeRecent,
+} from "@/lib/storage/recentJourneys";
 import {
   getStartPointSnapshot,
   parseStartPointSnapshot,
@@ -173,8 +182,9 @@ export function JourneyExperience() {
     "shinkansen",
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
+  const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
 
-  const { user } = useAuth();
+  const { user, enabled: authEnabled, signInWithGoogle } = useAuth();
 
   const startSnapshot = useSyncExternalStore(
     subscribeStartPoint,
@@ -182,6 +192,13 @@ export function JourneyExperience() {
     () => "",
   );
   const start = parseStartPointSnapshot(startSnapshot) ?? DEFAULT_START;
+
+  const recentSnapshot = useSyncExternalStore(
+    subscribeRecent,
+    getRecentSnapshot,
+    () => "[]",
+  );
+  const recentJourneys = parseRecentSnapshot(recentSnapshot);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -414,15 +431,32 @@ export function JourneyExperience() {
       isMock: places.provider === "mock" || weather.provider === "mock",
     };
     setJourney(result);
+    setSavedJourneyId(null);
     setNotice([places.notice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
 
-    // Auto-save every generated place to the signed-in user's account.
-    if (user) {
-      saveJourneyForUser(user.uid, result).catch(() => {
-        // Saving is best-effort; never block the result on a write failure.
-      });
+    // Keep a short local history of the last few generated places.
+    pushRecentJourney(result);
+  }
+
+  async function handleSaveCurrent() {
+    if (!user || !journey) return;
+    setSavedJourneyId(journey.id);
+    try {
+      await saveJourneyForUser(user.uid, journey);
+    } catch {
+      setSavedJourneyId(null); // saving failed — let the user retry
     }
+  }
+
+  function viewRecent(item: JourneyResult) {
+    setDirection(item.direction);
+    setPrefecture(item.prefecture);
+    setJourney(item);
+    setSavedJourneyId(null);
+    setNotice(null);
+    setFilterNotice(null);
+    setStage("result");
   }
 
   const filtersActive = selectedCategories.length > 0;
@@ -755,6 +789,37 @@ export function JourneyExperience() {
                   予算・時間・距離・移動手段に合う行き先だけを提案します
                 </p>
               </>
+            )}
+
+            {recentJourneys.length > 0 && (
+              <div className="mt-8 w-full max-w-md text-left">
+                <p className="text-xs font-bold text-[color:var(--muted)]">
+                  最近の行き先
+                </p>
+                <div className="mt-2 flex flex-col gap-2">
+                  {recentJourneys.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => viewRecent(item)}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-left transition hover:border-vermilion/50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-bold">
+                          {item.destination.name}
+                        </span>
+                        <span className="block text-xs text-[color:var(--muted)]">
+                          {item.prefecture.nameJa} ・ {item.distanceKm}km
+                        </span>
+                      </span>
+                      <ChevronRight
+                        size={16}
+                        className="shrink-0 text-[color:var(--muted)]"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
         </motion.section>
@@ -1122,6 +1187,33 @@ export function JourneyExperience() {
                   </p>
                 </div>
               </div>
+
+              {authEnabled &&
+                (user ? (
+                  <ActionButton
+                    onClick={handleSaveCurrent}
+                    icon={
+                      savedJourneyId === journey.id ? (
+                        <Check size={18} />
+                      ) : (
+                        <Bookmark size={18} />
+                      )
+                    }
+                    className="w-full"
+                  >
+                    {savedJourneyId === journey.id
+                      ? "保存しました"
+                      : "この旅を保存"}
+                  </ActionButton>
+                ) : (
+                  <ActionButton
+                    onClick={() => signInWithGoogle().catch(() => {})}
+                    icon={<Bookmark size={18} />}
+                    className="w-full"
+                  >
+                    ログインして保存
+                  </ActionButton>
+                ))}
             </div>
           </div>
 
