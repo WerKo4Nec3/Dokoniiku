@@ -78,7 +78,6 @@ import type {
 import { ActionButton } from "@/components/ui/ActionButton";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { JourneySkeleton } from "./JourneySkeleton";
-import { ProgressRail } from "./ProgressRail";
 
 type Stage = "landing" | "direction" | "prefecture" | "loading" | "result";
 type JourneyMode = "surprise" | "custom";
@@ -867,7 +866,6 @@ export function JourneyExperience() {
           exit={{ opacity: 0, y: -18 }}
           className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col justify-center px-5 py-24 sm:px-6"
         >
-          <ProgressRail current={0} />
           <div className="mt-12 grid items-center gap-10 md:grid-cols-2">
             <div className="relative mx-auto grid h-72 w-72 place-items-center">
               <div className="absolute inset-0 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float" />
@@ -949,7 +947,6 @@ export function JourneyExperience() {
           exit={{ opacity: 0, y: -18 }}
           className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-2xl flex-col justify-center px-5 py-24 sm:px-6"
         >
-          <ProgressRail current={1} />
           <div className="mt-10 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float sm:p-10">
             <div className="flex items-center justify-between gap-4">
               <p className="text-sm font-bold text-vermilion">
@@ -1032,9 +1029,7 @@ export function JourneyExperience() {
           animate={{ opacity: 1, y: 0 }}
           className="mx-auto min-h-[calc(100vh-4rem)] max-w-6xl px-4 py-24 sm:px-6"
         >
-          <ProgressRail current={2} />
-
-          <div className="mt-8 flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <p className="text-sm font-bold text-vermilion">
                 TABI&apos;S PICK / 週末の行き先
