@@ -1013,7 +1013,7 @@ export function JourneyExperience() {
           exit={{ opacity: 0 }}
         >
           <div className="fixed inset-x-0 top-24 z-10 flex justify-center">
-            <TabiMascot mood="thinking" size="small" />
+            <TabiMascot mood="walking" size="small" />
           </div>
           <JourneySkeleton />
           <p className="fixed inset-x-0 top-52 z-10 text-center text-sm font-bold text-vermilion">
@@ -1241,7 +1241,7 @@ export function JourneyExperience() {
               </div>
 
               <div className="flex items-start gap-3 rounded-lg bg-forest p-5 text-white">
-                <TabiMascot mood="reveal" size="small" />
+                <TabiMascot mood="excited" size="small" />
                 <div className="pt-3">
                   <p className="text-xs font-bold text-[#bfe7d8]">
                     タビのおすすめ理由
