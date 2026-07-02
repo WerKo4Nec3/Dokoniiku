@@ -17,6 +17,7 @@ import {
   LocateFixed,
   MapPin,
   RotateCcw,
+  Shuffle,
   Snowflake,
   SlidersHorizontal,
   Sparkles,
@@ -79,9 +80,74 @@ import { ActionButton } from "@/components/ui/ActionButton";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { JourneySkeleton } from "./JourneySkeleton";
 
-type Stage = "landing" | "direction" | "prefecture" | "loading" | "result";
+type Stage =
+  | "landing"
+  | "direction"
+  | "prefecture"
+  | "shuffle"
+  | "loading"
+  | "result";
 type JourneyMode = "surprise" | "custom";
 type TripLengthId = "day" | "one-night" | "two-night";
+
+// A destination paired with the transport that will be used to reach it.
+type Plan = { destination: Destination; transport: TransportMode };
+
+// Module-scope wrappers: these run only inside event handlers, but the
+// react-hooks purity lint cannot see that through indirect calls.
+const nowMs = () => Date.now();
+const nowIso = () => new Date().toISOString();
+function makeJourneyId(destinationId: string): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `${nowMs()}-${destinationId}`;
+}
+
+function sampleItems<T>(items: T[], count: number): T[] {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy.slice(0, count);
+}
+
+// Shared entrance animation: parents stagger their fadeUp children.
+const staggerParent = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
+};
+const fadeUp = {
+  hidden: { opacity: 0, y: 18 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+};
+
+// Smoothly expands/collapses togglable panels.
+function ExpandPanel({
+  open,
+  className,
+  children,
+}: {
+  open: boolean;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <AnimatePresence initial={false}>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
+          className={`w-full overflow-hidden ${className ?? ""}`}
+        >
+          {children}
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
 
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
@@ -187,6 +253,12 @@ export function JourneyExperience() {
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [shufflePool, setShufflePool] = useState<{
+    plans: Plan[];
+    providerMock: boolean;
+    placesNotice?: string;
+  } | null>(null);
+  const [shuffleOptions, setShuffleOptions] = useState<Plan[]>([]);
 
   const { user, enabled: authEnabled, signInWithGoogle } = useAuth();
 
@@ -293,6 +365,8 @@ export function JourneyExperience() {
     setNotice(null);
     setFilterNotice(null);
     setSelecting(false);
+    setShufflePool(null);
+    setShuffleOptions([]);
   }
 
   function choosePrefecture() {
@@ -317,12 +391,17 @@ export function JourneyExperience() {
     setStage("prefecture");
   }
 
-  async function chooseDestination() {
-    if (!direction || !prefecture) return;
+  // Fetch candidates and turn them into feasible plans. On an empty result,
+  // shows the appropriate notice and returns null.
+  async function buildPlans(): Promise<{
+    plans: Plan[];
+    providerMock: boolean;
+    placesNotice?: string;
+  } | null> {
+    if (!prefecture) return null;
     setNotice(null);
     setFilterNotice(null);
 
-    // Fetch first so we can validate the filters before showing the loader.
     const places = await getAttractionsByPrefecture(prefecture, selectedCategories);
     const candidates = places.data;
 
@@ -332,19 +411,14 @@ export function JourneyExperience() {
       );
       setFiltersOpen(true);
       setStage("prefecture");
-      return;
+      return null;
     }
 
-    const isCustom = journeyMode === "custom";
-    const usableModes: TransportMode[] = transports.length
-      ? transports
-      : ["train"];
-
-    // Each plan pairs a destination with the transport it will use.
-    type Plan = { destination: Destination; transport: TransportMode };
     let plans: Plan[];
-
-    if (isCustom) {
+    if (journeyMode === "custom") {
+      const usableModes: TransportMode[] = transports.length
+        ? transports
+        : ["train"];
       plans = [];
       for (const candidate of candidates) {
         const distance = haversineDistanceKm(start, candidate);
@@ -368,7 +442,7 @@ export function JourneyExperience() {
         );
         setFiltersOpen(true);
         setStage("prefecture");
-        return;
+        return null;
       }
     } else {
       plans = candidates.map((candidate) => ({
@@ -377,21 +451,25 @@ export function JourneyExperience() {
       }));
     }
 
-    // When re-rolling, avoid showing the same place twice in a row.
-    let pool = plans;
-    if (journey && plans.length > 1) {
-      const others = plans.filter(
-        (plan) => plan.destination.id !== journey.destination.id,
-      );
-      if (others.length) pool = others;
-    }
+    return {
+      plans,
+      providerMock: places.provider === "mock",
+      placesNotice: places.notice,
+    };
+  }
 
+  // The loading → result flow for one chosen plan.
+  async function finalizePlan(
+    plan: Plan,
+    providerMock: boolean,
+    placesNotice?: string,
+  ) {
+    if (!direction || !prefecture) return;
     setStage("loading");
-    const startedAt = Date.now();
-    const chosen = randomItem(pool);
-    const picked = chosen.destination;
-    const transport = chosen.transport;
-    const transfer = isCustom ? allowTransfer : false;
+    const startedAt = nowMs();
+    const picked = plan.destination;
+    const transport = plan.transport;
+    const transfer = journeyMode === "custom" ? allowTransfer : false;
 
     const [weather, summary] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
@@ -412,15 +490,12 @@ export function JourneyExperience() {
       transport,
       transfer,
     );
-    const minimumWait = Math.max(0, 1100 - (Date.now() - startedAt));
+    const minimumWait = Math.max(0, 1100 - (nowMs() - startedAt));
     await new Promise((resolve) => window.setTimeout(resolve, minimumWait));
 
     const result: JourneyResult = {
-      id:
-        typeof crypto !== "undefined" && "randomUUID" in crypto
-          ? crypto.randomUUID()
-          : `${Date.now()}-${destination.id}`,
-      createdAt: new Date().toISOString(),
+      id: makeJourneyId(destination.id),
+      createdAt: nowIso(),
       direction,
       start,
       prefecture,
@@ -432,16 +507,67 @@ export function JourneyExperience() {
       people,
       transport,
       transfer,
-      isMock: places.provider === "mock" || weather.provider === "mock",
+      isMock: providerMock || weather.provider === "mock",
     };
     setJourney(result);
     setSavedJourneyId(null);
     setAiText(null);
-    setNotice([places.notice, weather.notice].filter(Boolean).join(" "));
+    setNotice([placesNotice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
 
     // Keep a short local history of the last few generated places.
     pushRecentJourney(result);
+  }
+
+  async function chooseDestination() {
+    if (!direction || !prefecture) return;
+    const built = await buildPlans();
+    if (!built) return;
+
+    // When re-rolling, avoid showing the same place twice in a row.
+    let pool = built.plans;
+    if (journey && pool.length > 1) {
+      const others = pool.filter(
+        (plan) => plan.destination.id !== journey.destination.id,
+      );
+      if (others.length) pool = others;
+    }
+
+    await finalizePlan(randomItem(pool), built.providerMock, built.placesNotice);
+  }
+
+  // Shuffle mode: deal five candidate cards and let the user pick one.
+  async function startShuffle() {
+    if (!direction || !prefecture) return;
+    const built = await buildPlans();
+    if (!built) return;
+    setShufflePool(built);
+    setShuffleOptions(sampleItems(built.plans, 5));
+    setStage("shuffle");
+  }
+
+  function reshuffle() {
+    if (!shufflePool) return;
+    setShuffleOptions((current) => {
+      const shown = new Set(current.map((plan) => plan.destination.id));
+      const fresh = shufflePool.plans.filter(
+        (plan) => !shown.has(plan.destination.id),
+      );
+      // Prefer unseen places; top up from the full pool when running low.
+      const next = sampleItems(fresh, 5);
+      if (next.length < 5) {
+        const rest = shufflePool.plans.filter(
+          (plan) => !next.some((p) => p.destination.id === plan.destination.id),
+        );
+        next.push(...sampleItems(rest, 5 - next.length));
+      }
+      return next;
+    });
+  }
+
+  function chooseShuffleOption(plan: Plan) {
+    if (!shufflePool) return;
+    void finalizePlan(plan, shufflePool.providerMock, shufflePool.placesNotice);
   }
 
   async function handleAskAi() {
@@ -510,7 +636,7 @@ export function JourneyExperience() {
         )}
       </button>
 
-      {filtersOpen && (
+      <ExpandPanel open={filtersOpen}>
         <div className="mt-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-4">
           <p className="text-xs font-bold text-[color:var(--muted)]">
             気になるジャンル（複数選択可・未選択ならおまかせ）
@@ -543,7 +669,7 @@ export function JourneyExperience() {
             </button>
           )}
         </div>
-      )}
+      </ExpandPanel>
     </div>
   );
 
@@ -557,35 +683,54 @@ export function JourneyExperience() {
           exit={{ opacity: 0, y: -16 }}
           className="hero-image relative flex min-h-[calc(100vh-4rem)] items-end overflow-hidden pt-16 md:items-center"
         >
-          <div className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 pb-12 pt-[38vh] text-center sm:px-6 md:py-20">
-            <div className="mb-2 flex justify-center">
+          <motion.div
+            variants={staggerParent}
+            initial="hidden"
+            animate="show"
+            className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 pb-12 pt-[38vh] text-center sm:px-6 md:py-20"
+          >
+            <motion.div variants={fadeUp} className="mb-2 flex justify-center">
               <TabiMascot mood="idle" />
-            </div>
-            <div className="mb-4 flex items-center justify-center gap-2 text-sm font-bold text-forest dark:text-[#8fd0b9]">
+            </motion.div>
+            <motion.div
+              variants={fadeUp}
+              className="mb-4 flex items-center justify-center gap-2 text-sm font-bold text-forest dark:text-[#8fd0b9]"
+            >
               <span className="h-px w-8 bg-current" />
               WEEKEND TRIP SELECTOR
               <span className="h-px w-8 bg-current" />
-            </div>
-            <h1 className="text-5xl font-black leading-[1.08] text-[color:var(--foreground)] sm:text-6xl">
+            </motion.div>
+            <motion.h1
+              variants={fadeUp}
+              className="text-5xl font-black leading-[1.08] text-[color:var(--foreground)] sm:text-6xl"
+            >
               旅コンパス
               <span className="mt-3 block text-xl font-semibold text-[color:var(--muted)] sm:text-2xl">
                 Tabi Compass
               </span>
-            </h1>
-            <p className="mt-6 max-w-md text-base font-medium leading-8 text-[color:var(--muted)] sm:text-lg">
+            </motion.h1>
+            <motion.p
+              variants={fadeUp}
+              className="mt-6 max-w-md text-base font-medium leading-8 text-[color:var(--muted)] sm:text-lg"
+            >
               次の休日、どこへ行く？
               <br />
               旅の精タビに、方角から目的地まで任せよう。
-            </p>
-            <ActionButton
-              onClick={beginDirectionSelection}
-              icon={<Sparkles size={18} />}
-              className="mt-8 w-full sm:w-auto"
-            >
-              旅をはじめる
-            </ActionButton>
+            </motion.p>
+            <motion.div variants={fadeUp} className="mt-8 w-full sm:w-auto">
+              <ActionButton
+                onClick={beginDirectionSelection}
+                icon={<Sparkles size={18} />}
+                className="w-full sm:w-auto"
+              >
+                旅をはじめる
+              </ActionButton>
+            </motion.div>
 
-            <div className="mt-6 flex w-full flex-col items-center gap-3">
+            <motion.div
+              variants={fadeUp}
+              className="mt-6 flex w-full flex-col items-center gap-3"
+            >
               <button
                 type="button"
                 onClick={() => setStartPickerOpen((open) => !open)}
@@ -595,8 +740,8 @@ export function JourneyExperience() {
                 出発地点: {start.name}
               </button>
 
-              {startPickerOpen && (
-                <div className="w-full max-w-md rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4">
+              <ExpandPanel open={startPickerOpen} className="max-w-md">
+                <div className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4">
                   <button
                     type="button"
                     onClick={useCurrentLocation}
@@ -631,10 +776,13 @@ export function JourneyExperience() {
                     ))}
                   </div>
                 </div>
-              )}
-            </div>
+              </ExpandPanel>
+            </motion.div>
 
-            <div className="mt-3 inline-flex items-center gap-3 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-1.5">
+            <motion.div
+              variants={fadeUp}
+              className="mt-3 inline-flex items-center gap-3 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-1.5"
+            >
               <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)]">
                 <Users size={14} />
                 人数
@@ -662,9 +810,12 @@ export function JourneyExperience() {
                   +
                 </button>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="mt-4 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1">
+            <motion.div
+              variants={fadeUp}
+              className="mt-4 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1"
+            >
               <button
                 type="button"
                 onClick={() => setJourneyMode("surprise")}
@@ -689,10 +840,15 @@ export function JourneyExperience() {
                 <SlidersHorizontal size={13} />
                 設定して探す
               </button>
-            </div>
+            </motion.div>
 
             {journeyMode === "surprise" ? (
-              <>
+              <motion.div
+                key="surprise-settings"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full flex-col items-center"
+              >
                 <div className="mt-3 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1">
                   <button
                     type="button"
@@ -722,9 +878,14 @@ export function JourneyExperience() {
                     ? "出発地から日帰りで行ける範囲で、行き先をランダムに提案します"
                     : "全国47都道府県から、行き先をランダムに提案します"}
                 </p>
-              </>
+              </motion.div>
             ) : (
-              <>
+              <motion.div
+                key="custom-settings"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex w-full flex-col items-center"
+              >
                 <div className="mt-4 w-full max-w-md rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 text-left">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-[color:var(--muted)]">
@@ -821,11 +982,11 @@ export function JourneyExperience() {
                 <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
                   予算・時間・距離・移動手段に合う行き先だけを提案します
                 </p>
-              </>
+              </motion.div>
             )}
 
             {recentJourneys.length > 0 && (
-              <div className="mt-8 w-full max-w-md text-left">
+              <motion.div variants={fadeUp} className="mt-8 w-full max-w-md text-left">
                 <p className="text-xs font-bold text-[color:var(--muted)]">
                   最近の行き先
                 </p>
@@ -852,9 +1013,9 @@ export function JourneyExperience() {
                     </button>
                   ))}
                 </div>
-              </div>
+              </motion.div>
             )}
-          </div>
+          </motion.div>
         </motion.section>
       )}
 
@@ -867,7 +1028,12 @@ export function JourneyExperience() {
           className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col justify-center px-5 py-24 sm:px-6"
         >
           <div className="mt-12 grid items-center gap-10 md:grid-cols-2">
-            <div className="relative mx-auto grid h-72 w-72 place-items-center">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.88 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 20 }}
+              className="relative mx-auto grid h-72 w-72 place-items-center"
+            >
               <div className="absolute inset-0 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float" />
               {directions.map((item) => {
                 const angle = directionAngles[item];
@@ -904,7 +1070,7 @@ export function JourneyExperience() {
               <div className="z-10 grid h-16 w-16 place-items-center rounded-full border-4 border-[color:var(--surface)] bg-forest text-white shadow-lg">
                 <Sparkles size={22} />
               </div>
-            </div>
+            </motion.div>
 
             <div className="text-center md:text-left">
               <div className="mx-auto md:mx-0">
@@ -986,21 +1152,134 @@ export function JourneyExperience() {
               </div>
             )}
 
-            <ActionButton
-              onClick={chooseDestination}
-              icon={<Sparkles size={18} />}
-              className="mt-6 w-full sm:w-auto"
-            >
-              目的地を決める
-            </ActionButton>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <ActionButton
+                onClick={chooseDestination}
+                icon={<Sparkles size={18} />}
+                className="w-full sm:w-auto"
+              >
+                目的地を決める
+              </ActionButton>
+              <ActionButton
+                variant="ghost"
+                onClick={startShuffle}
+                icon={<Shuffle size={17} />}
+                className="w-full sm:w-auto"
+              >
+                5つの候補から選ぶ
+              </ActionButton>
+            </div>
             <button
               type="button"
               onClick={returnToStart}
-              className="mt-3 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)] sm:ml-4"
+              className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
             >
               <House size={13} />
               メインに戻る
             </button>
+          </div>
+        </motion.section>
+      )}
+
+      {stage === "shuffle" && prefecture && (
+        <motion.section
+          key="shuffle"
+          initial={{ opacity: 0, y: 18 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -18 }}
+          className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-5 py-24 sm:px-6"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-sm font-bold text-vermilion">
+                SHUFFLE / {prefecture.nameJa}
+              </p>
+              <h2 className="mt-2 text-3xl font-black sm:text-4xl">
+                気になる場所をひとつ選ぼう
+              </h2>
+              <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
+                タビが{prefecture.nameJa}から5つの候補を引いてきたよ。
+              </p>
+            </div>
+            <TabiMascot mood="thinking" size="small" />
+          </div>
+
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {shuffleOptions.map((plan, index) => (
+              <motion.button
+                key={plan.destination.id}
+                type="button"
+                onClick={() => chooseShuffleOption(plan)}
+                initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                transition={{ delay: index * 0.08, type: "spring", stiffness: 260, damping: 22 }}
+                whileHover={{ y: -6, scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="group overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] text-left shadow-float transition hover:border-vermilion/60"
+              >
+                <div className="relative h-32 overflow-hidden bg-forest/10">
+                  {plan.destination.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={plan.destination.imageUrl}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center text-forest/50 dark:text-[#8fd0b9]/50">
+                      <MapPin size={32} />
+                    </div>
+                  )}
+                </div>
+                <div className="p-4">
+                  <h3 className="text-sm font-black leading-snug">
+                    {plan.destination.name}
+                  </h3>
+                  <p className="mt-1 text-xs font-bold text-[color:var(--muted)]">
+                    {start.name}から約
+                    {haversineDistanceKm(start, plan.destination)}km ・{" "}
+                    {transportLabel(
+                      plan.transport,
+                      journeyMode === "custom" ? allowTransfer : false,
+                    )}
+                  </p>
+                  <div className="mt-2.5 flex flex-wrap gap-1.5">
+                    {plan.destination.categories.slice(0, 2).map((category) => (
+                      <span
+                        key={category}
+                        className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                      >
+                        {categoryLabels[category]}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </motion.button>
+            ))}
+          </div>
+
+          <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-[color:var(--line)] pt-6 sm:flex-row">
+            <p className="text-sm font-medium text-[color:var(--muted)]">
+              ピンとこない？ 別の5つを引き直せるよ。
+            </p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <ActionButton
+                variant="ghost"
+                onClick={reshuffle}
+                icon={<Shuffle size={17} />}
+              >
+                引き直す
+              </ActionButton>
+              <button
+                type="button"
+                onClick={returnToStart}
+                className="inline-flex items-center justify-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+              >
+                <House size={15} />
+                最初からやり直す
+              </button>
+            </div>
           </div>
         </motion.section>
       )}
@@ -1065,13 +1344,18 @@ export function JourneyExperience() {
             </div>
           )}
 
-          <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
-            <div className="space-y-6">
+          <motion.div
+            variants={staggerParent}
+            initial="hidden"
+            animate="show"
+            className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_.8fr]"
+          >
+            <motion.div variants={fadeUp} className="space-y-6">
               <div className="relative h-60 overflow-hidden rounded-lg sm:h-80">
                 <div
                   className="absolute inset-0 bg-cover bg-center"
                   style={{
-                    backgroundImage: `url('${journey.destination.imageUrl ?? "/travel-backdrop.png"}')`,
+                    backgroundImage: `url('${journey.destination.imageUrl ?? "/travel-backdrop.jpg"}')`,
                   }}
                 />
               </div>
@@ -1142,9 +1426,9 @@ export function JourneyExperience() {
                   <ExternalLink size={16} />
                 </a>
               </div>
-            </div>
+            </motion.div>
 
-            <div className="space-y-4">
+            <motion.div variants={fadeUp} className="space-y-4">
               <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1278,8 +1562,8 @@ export function JourneyExperience() {
                     ログインして保存
                   </ActionButton>
                 ))}
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
           <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-[color:var(--line)] pt-8 sm:flex-row">
             <p className="text-sm font-medium text-[color:var(--muted)]">

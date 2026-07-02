@@ -84,7 +84,7 @@ a:focus-visible {
       rgba(247, 244, 237, 0.92) 38%,
       rgba(247, 244, 237, 0.15) 72%
     ),
-    url("/travel-backdrop.png");
+    url("/travel-backdrop.jpg");
   background-position: center;
   background-size: cover;
 }
@@ -97,7 +97,7 @@ a:focus-visible {
       rgba(23, 33, 29, 0.9) 42%,
       rgba(23, 33, 29, 0.28) 76%
     ),
-    url("/travel-backdrop.png");
+    url("/travel-backdrop.jpg");
 }
 
 @media (max-width: 720px) {
@@ -109,7 +109,7 @@ a:focus-visible {
         rgba(247, 244, 237, 0.9) 56%,
         rgba(247, 244, 237, 1) 100%
       ),
-      url("/travel-backdrop.png");
+      url("/travel-backdrop.jpg");
     background-position: 62% center;
   }
 
@@ -121,7 +121,7 @@ a:focus-visible {
         rgba(23, 33, 29, 0.88) 56%,
         rgba(23, 33, 29, 1) 100%
       ),
-      url("/travel-backdrop.png");
+      url("/travel-backdrop.jpg");
   }
 }
 

@@ -157,6 +157,15 @@ async function fetchCategoryPages(
   );
 }
 
+// Wikipedia's lead image for stub articles is often a locator map or other
+// SVG-derived graphic rather than a photo — skip those as card thumbnails.
+function usableThumbnail(url?: string): string | undefined {
+  if (!url) return undefined;
+  if (/\.svg([./]|$)/i.test(url)) return undefined;
+  if (/location|locator|position|_map|map_of|地図|位置/i.test(url)) return undefined;
+  return url;
+}
+
 function pageToDestination(
   prefecture: Prefecture,
   page: WikipediaSearchPage,
@@ -170,7 +179,7 @@ function pageToDestination(
     longitude: page.coordinates![0].lon,
     categories,
     description: buildDescription(prefecture),
-    imageUrl: page.thumbnail?.source,
+    imageUrl: usableThumbnail(page.thumbnail?.source),
   };
 }
 

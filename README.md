@@ -22,13 +22,14 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - Wikipedia-powered attraction search (geosearch, plus per-prefecture category search when a genre is selected) with automatic mock fallback
 - Wikipedia article summaries and photos enrich each destination's description, with a templated fallback when no article is found
 - Optional category filter applied at the prefecture step
+- Shuffle mode: deal five candidate cards from the prefecture and pick one (with a redeal option)
 - Re-roll the destination within the same direction and prefecture (without repeating the current place), or return to the main menu to start over
 - OpenWeather current conditions with automatic mock fallback
 - One-tap link to open the destination directly in Google Maps (centred on the exact coordinates)
 - Transport-aware travel time estimate
 - Category-based budget estimate
 - Local history of the last five generated places on the landing screen
-- Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list
+- Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list, shown as filterable cards (by prefecture and genre)
 - Optional AI place insight (Gemini) via a server-side route, surfaced as an "ask AI" button on the result
 - Light and dark themes persisted in `localStorage`
 - Loading, empty, error-fallback, and mock-mode states
