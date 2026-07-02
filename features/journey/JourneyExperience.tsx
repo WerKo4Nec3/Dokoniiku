@@ -17,6 +17,7 @@ import {
   LocateFixed,
   MapPin,
   RotateCcw,
+  Share2,
   Shuffle,
   Snowflake,
   SlidersHorizontal,
@@ -252,8 +253,11 @@ export function JourneyExperience() {
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
+  const [shareFeedback, setShareFeedback] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiPlan, setAiPlan] = useState<string | null>(null);
+  const [aiPlanLoading, setAiPlanLoading] = useState(false);
   const [shufflePool, setShufflePool] = useState<{
     plans: Plan[];
     providerMock: boolean;
@@ -512,7 +516,9 @@ export function JourneyExperience() {
     };
     setJourney(result);
     setSavedJourneyId(null);
+    setShareFeedback(false);
     setAiText(null);
+    setAiPlan(null);
     setNotice([placesNotice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
 
@@ -613,10 +619,71 @@ export function JourneyExperience() {
     setPrefecture(item.prefecture);
     setJourney(item);
     setSavedJourneyId(null);
+    setShareFeedback(false);
     setAiText(null);
+    setAiPlan(null);
     setNotice(null);
     setFilterNotice(null);
     setStage("result");
+  }
+
+  async function handleShare() {
+    if (!journey) return;
+    const mapsUrl = googleMapsSearchUrl(journey.destination);
+    const text = [
+      `旅コンパスのタビが選んだ行き先: ${journey.destination.name}（${journey.prefecture.nameJa}）`,
+      `${journey.start.name}から約${journey.distanceKm}km ・ ${transportLabel(journey.transport, journey.transfer)}で片道${formatMinutes(journey.estimatedTravelTime)}`,
+      `地図: ${mapsUrl}`,
+    ].join("\n");
+
+    try {
+      // Native share sheet on mobile; clipboard fallback on desktop.
+      if (typeof navigator.share === "function") {
+        await navigator.share({
+          title: `旅コンパス | ${journey.destination.name}`,
+          text,
+          url: window.location.origin,
+        });
+        return;
+      }
+      await navigator.clipboard.writeText(`${text}\n${window.location.origin}`);
+      setShareFeedback(true);
+      window.setTimeout(() => setShareFeedback(false), 2200);
+    } catch {
+      // user cancelled the share sheet — nothing to do
+    }
+  }
+
+  async function handleAskPlan() {
+    if (!journey || aiPlanLoading) return;
+    setAiPlanLoading(true);
+    setAiPlan(null);
+    try {
+      const response = await fetch("/api/place-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "plan",
+          name: journey.destination.name,
+          prefecture: journey.prefecture.nameJa,
+          categories: journey.destination.categories,
+          weather: journey.weather.description,
+          temperature: journey.weather.temperature,
+          transport: transportLabel(journey.transport, journey.transfer),
+          travelMinutes: journey.estimatedTravelTime,
+        }),
+      });
+      const data = await response.json();
+      setAiPlan(
+        response.ok && data.text
+          ? (data.text as string)
+          : "プランを作れませんでした。少し時間をおいて試してみてね。",
+      );
+    } catch {
+      setAiPlan("プランを作れませんでした。少し時間をおいて試してみてね。");
+    } finally {
+      setAiPlanLoading(false);
+    }
   }
 
   const filtersActive = selectedCategories.length > 0;
@@ -1369,19 +1436,32 @@ export function JourneyExperience() {
 
                 {aiEnabled && (
                   <div className="mt-4 border-t border-[color:var(--line)] pt-4">
-                    {!aiText && (
-                      <button
-                        type="button"
-                        onClick={handleAskAi}
-                        disabled={aiLoading}
-                        className="inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60"
-                      >
-                        <Sparkles size={14} />
-                        {aiLoading ? "タビが調べています…" : "タビにAIでもっと聞く"}
-                      </button>
-                    )}
+                    <div className="flex flex-wrap gap-2">
+                      {!aiText && (
+                        <button
+                          type="button"
+                          onClick={handleAskAi}
+                          disabled={aiLoading}
+                          className="inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+                        >
+                          <Sparkles size={14} />
+                          {aiLoading ? "タビが調べています…" : "タビにAIでもっと聞く"}
+                        </button>
+                      )}
+                      {!aiPlan && (
+                        <button
+                          type="button"
+                          onClick={handleAskPlan}
+                          disabled={aiPlanLoading}
+                          className="inline-flex items-center gap-2 rounded-full border border-forest px-4 py-2 text-xs font-bold text-forest transition hover:bg-forest/10 disabled:opacity-60 dark:border-[#8fd0b9] dark:text-[#8fd0b9]"
+                        >
+                          <Ticket size={14} />
+                          {aiPlanLoading ? "プランを考え中…" : "1日プランを作ってもらう"}
+                        </button>
+                      )}
+                    </div>
                     {aiText && (
-                      <div className="flex items-start gap-2">
+                      <div className="mt-3 flex items-start gap-2">
                         <Sparkles
                           size={16}
                           className="mt-0.5 shrink-0 text-forest dark:text-[#8fd0b9]"
@@ -1395,6 +1475,25 @@ export function JourneyExperience() {
                           </p>
                           <p className="mt-2 text-[10px] text-[color:var(--muted)]">
                             AIによる生成のため、内容が不正確な場合があります。
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {aiPlan && (
+                      <div className="mt-3 flex items-start gap-2">
+                        <Ticket
+                          size={16}
+                          className="mt-0.5 shrink-0 text-forest dark:text-[#8fd0b9]"
+                        />
+                        <div>
+                          <p className="text-xs font-bold text-[color:var(--muted)]">
+                            タビの1日プラン
+                          </p>
+                          <p className="mt-1 whitespace-pre-line text-sm font-medium leading-7 text-[color:var(--foreground)]">
+                            {aiPlan}
+                          </p>
+                          <p className="mt-2 text-[10px] text-[color:var(--muted)]">
+                            AIによる生成のため、営業時間などは事前に確認してね。
                           </p>
                         </div>
                       </div>
@@ -1563,6 +1662,15 @@ export function JourneyExperience() {
                     ログインして保存
                   </ActionButton>
                 ))}
+
+              <ActionButton
+                variant="ghost"
+                onClick={handleShare}
+                icon={shareFeedback ? <Check size={18} /> : <Share2 size={18} />}
+                className="w-full"
+              >
+                {shareFeedback ? "コピーしました" : "この旅を共有"}
+              </ActionButton>
             </motion.div>
           </motion.div>
 

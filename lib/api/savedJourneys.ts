@@ -8,9 +8,10 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { JourneyResult } from "@/types";
+import type { JourneyResult, SavedJourney } from "@/types";
 
 function journeysCollection(uid: string) {
   if (!db) return null;
@@ -26,14 +27,23 @@ export async function saveJourneyForUser(uid: string, journey: JourneyResult) {
   });
 }
 
-export async function fetchUserJourneys(uid: string): Promise<JourneyResult[]> {
+export async function fetchUserJourneys(uid: string): Promise<SavedJourney[]> {
   const ref = journeysCollection(uid);
   if (!ref) return [];
   const snapshot = await getDocs(query(ref, orderBy("savedAt", "desc"), limit(100)));
-  return snapshot.docs.map((entry) => entry.data() as JourneyResult);
+  return snapshot.docs.map((entry) => entry.data() as SavedJourney);
 }
 
 export async function deleteUserJourney(uid: string, id: string) {
   if (!db) return;
   await deleteDoc(doc(db, "users", uid, "journeys", id));
+}
+
+export async function setJourneyVisited(
+  uid: string,
+  id: string,
+  visited: boolean,
+) {
+  if (!db) return;
+  await updateDoc(doc(db, "users", uid, "journeys", id), { visited });
 }

@@ -29,7 +29,10 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - Transport-aware travel time estimate
 - Category-based budget estimate
 - Local history of the last five generated places on the landing screen
-- Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list, shown as filterable cards (by prefecture and genre)
+- Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list, shown as filterable cards (by prefecture, genre, and visited)
+- "Visited" marks on saved places, with a travel-record block: visited counter and a tile-grid map of Japan showing conquered prefectures
+- One-tap share of the result (native share sheet on mobile, clipboard copy on desktop)
+- Optional AI day plan (morning/afternoon/evening + weather-aware packing list) alongside the AI place insight
 - Optional AI place insight (Gemini) via a server-side route, surfaced as an "ask AI" button on the result
 - Light and dark themes persisted in `localStorage`
 - Loading, empty, error-fallback, and mock-mode states

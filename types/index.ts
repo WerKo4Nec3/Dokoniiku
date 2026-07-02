@@ -89,3 +89,9 @@ export type JourneyResult = {
   transfer: boolean;
   isMock: boolean;
 };
+
+// A journey stored in the user's cloud list; `visited` marks places the
+// user has actually been to.
+export type SavedJourney = JourneyResult & {
+  visited?: boolean;
+};

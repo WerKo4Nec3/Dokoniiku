@@ -4,6 +4,7 @@ import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
+  Check,
   ExternalLink,
   MapPin,
   RotateCcw,
@@ -12,7 +13,11 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { deleteUserJourney, fetchUserJourneys } from "@/lib/api/savedJourneys";
+import {
+  deleteUserJourney,
+  fetchUserJourneys,
+  setJourneyVisited,
+} from "@/lib/api/savedJourneys";
 import {
   categoryLabels,
   formatMinutes,
@@ -20,16 +25,18 @@ import {
   googleMapsSearchUrl,
   transportLabel,
 } from "@/lib/utils/travel";
-import type { DestinationCategory, JourneyResult } from "@/types";
+import { JapanTileMap } from "@/components/JapanTileMap";
+import type { DestinationCategory, SavedJourney } from "@/types";
 
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
 export default function SavedPage() {
   const { enabled, loading, user, signInWithGoogle } = useAuth();
   // null = not loaded yet (shows the loading state).
-  const [journeys, setJourneys] = useState<JourneyResult[] | null>(null);
+  const [journeys, setJourneys] = useState<SavedJourney[] | null>(null);
   const [prefectureFilter, setPrefectureFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<DestinationCategory | null>(null);
+  const [visitedOnly, setVisitedOnly] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -69,12 +76,32 @@ export default function SavedPage() {
         (journey) =>
           (!prefectureFilter || journey.prefecture.id === prefectureFilter) &&
           (!categoryFilter ||
-            journey.destination.categories.includes(categoryFilter)),
+            journey.destination.categories.includes(categoryFilter)) &&
+          (!visitedOnly || journey.visited),
       ),
-    [journeys, prefectureFilter, categoryFilter],
+    [journeys, prefectureFilter, categoryFilter, visitedOnly],
   );
 
-  const filtersActive = prefectureFilter !== null || categoryFilter !== null;
+  const filtersActive =
+    prefectureFilter !== null || categoryFilter !== null || visitedOnly;
+
+  const savedPrefectureIds = useMemo(
+    () => new Set((journeys ?? []).map((journey) => journey.prefecture.id)),
+    [journeys],
+  );
+  const visitedPrefectureIds = useMemo(
+    () =>
+      new Set(
+        (journeys ?? [])
+          .filter((journey) => journey.visited)
+          .map((journey) => journey.prefecture.id),
+      ),
+    [journeys],
+  );
+  const visitedCount = useMemo(
+    () => (journeys ?? []).filter((journey) => journey.visited).length,
+    [journeys],
+  );
 
   async function handleDelete(id: string) {
     if (!user) return;
@@ -82,6 +109,19 @@ export default function SavedPage() {
       current ? current.filter((item) => item.id !== id) : current,
     );
     await deleteUserJourney(user.uid, id).catch(() => {});
+  }
+
+  async function toggleVisited(journey: SavedJourney) {
+    if (!user) return;
+    const next = !journey.visited;
+    setJourneys((current) =>
+      current
+        ? current.map((item) =>
+            item.id === journey.id ? { ...item, visited: next } : item,
+          )
+        : current,
+    );
+    await setJourneyVisited(user.uid, journey.id, next).catch(() => {});
   }
 
   const chipClass = (active: boolean) =>
@@ -147,7 +187,51 @@ export default function SavedPage() {
           )}
 
           {journeys !== null && journeys.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-8 flex flex-col items-start justify-between gap-6 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 sm:flex-row sm:items-center"
+            >
+              <div>
+                <h2 className="text-sm font-black">旅の記録</h2>
+                <p className="mt-3 text-3xl font-black">
+                  {visitedPrefectureIds.size}
+                  <span className="text-base font-bold text-[color:var(--muted)]">
+                    {" "}
+                    / 47 都道府県
+                  </span>
+                </p>
+                <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
+                  行った場所 {visitedCount}件 ・ 保存 {journeys.length}件
+                </p>
+                <p className="mt-3 flex items-center gap-3 text-[11px] font-bold text-[color:var(--muted)]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-vermilion" />
+                    行った
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="h-2.5 w-2.5 rounded-[3px] bg-forest/50 dark:bg-[#8fd0b9]/50" />
+                    保存済み
+                  </span>
+                </p>
+              </div>
+              <JapanTileMap
+                savedIds={savedPrefectureIds}
+                visitedIds={visitedPrefectureIds}
+              />
+            </motion.div>
+          )}
+
+          {journeys !== null && journeys.length > 0 && (
             <div className="mb-6 flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setVisitedOnly((value) => !value)}
+                className={chipClass(visitedOnly)}
+              >
+                ✓ 行った場所
+              </button>
+              <span className="mx-1 h-4 w-px bg-[color:var(--line)]" />
               {prefectureOptions.length > 1 &&
                 prefectureOptions.map((option) => (
                   <button
@@ -187,6 +271,7 @@ export default function SavedPage() {
                   onClick={() => {
                     setPrefectureFilter(null);
                     setCategoryFilter(null);
+                    setVisitedOnly(false);
                   }}
                   className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--muted)] underline-offset-2 transition hover:text-[color:var(--foreground)] hover:underline"
                 >
@@ -233,20 +318,43 @@ export default function SavedPage() {
                     <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                       {journey.prefecture.nameJa}
                     </span>
+                    {journey.visited && (
+                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-vermilion px-2.5 py-1 text-[11px] font-black text-white">
+                        <Check size={11} strokeWidth={3} />
+                        行った
+                      </span>
+                    )}
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
                       <h2 className="text-base font-black leading-snug">
                         {journey.destination.name}
                       </h2>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(journey.id)}
-                        aria-label="削除"
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
-                      >
-                        <Trash2 size={15} />
-                      </button>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => toggleVisited(journey)}
+                          aria-label={
+                            journey.visited ? "未訪問にする" : "行ったに変更"
+                          }
+                          title={journey.visited ? "未訪問にする" : "行った！"}
+                          className={`grid h-8 w-8 place-items-center rounded-full transition ${
+                            journey.visited
+                              ? "bg-vermilion/15 text-vermilion"
+                              : "text-[color:var(--muted)] hover:bg-forest/10 hover:text-forest dark:hover:text-[#8fd0b9]"
+                          }`}
+                        >
+                          <Check size={15} strokeWidth={3} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(journey.id)}
+                          aria-label="削除"
+                          className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mt-2 flex flex-wrap gap-1.5">
