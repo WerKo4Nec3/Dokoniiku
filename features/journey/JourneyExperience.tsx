@@ -910,7 +910,7 @@ export function JourneyExperience() {
               <div className="mx-auto md:mx-0">
                 <TabiMascot
                   mood={selecting ? "thinking" : "reveal"}
-                  size="small"
+                  size="medium"
                 />
               </div>
               <p className="mt-5 text-sm font-bold text-vermilion">
@@ -968,9 +968,9 @@ export function JourneyExperience() {
             <p className="mt-5 max-w-md text-base font-medium leading-8 text-[color:var(--muted)]">
               {prefecture.shortDescriptionJa}
             </p>
-            <div className="mt-8 flex items-start gap-3 border-t border-[color:var(--line)] pt-6">
-              <TabiMascot mood="reveal" size="small" />
-              <p className="pt-4 text-sm font-medium leading-7">
+            <div className="mt-8 flex items-center gap-4 border-t border-[color:var(--line)] pt-6">
+              <TabiMascot mood="reveal" size="medium" />
+              <p className="text-sm font-medium leading-7">
                 「{direction}」の風が、ここまで連れてきたよ。
                 <br />
                 次は本当の目的地を探そう。

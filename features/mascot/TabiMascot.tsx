@@ -20,12 +20,18 @@ const moodLabel: Record<MascotMood, string> = {
   reveal: "旅の精タビが行き先を指さしている",
 };
 
+const sizeClass: Record<"small" | "medium" | "large", string> = {
+  small: "h-24 w-24",
+  medium: "h-40 w-40",
+  large: "h-48 w-48",
+};
+
 export function TabiMascot({
   mood = "idle",
   size = "large",
 }: {
   mood?: MascotMood;
-  size?: "small" | "large";
+  size?: "small" | "medium" | "large";
 }) {
   const reducedMotion = useReducedMotion();
   const animation = reducedMotion
@@ -42,7 +48,7 @@ export function TabiMascot({
 
   return (
     <motion.div
-      className={size === "large" ? "h-48 w-48" : "h-24 w-24"}
+      className={sizeClass[size]}
       animate={animation}
       transition={{
         duration: mood === "thinking" ? 0.9 : mood === "walking" ? 0.6 : 2.8,
