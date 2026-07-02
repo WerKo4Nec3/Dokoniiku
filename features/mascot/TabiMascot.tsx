@@ -42,7 +42,7 @@ export function TabiMascot({
     : mood === "thinking"
       ? { y: [0, -12, 0], rotate: [0, 6, -6, 0] }
       : mood === "excited"
-        ? { y: [0, -16, 0], scale: [1, 1.06, 1] }
+        ? { y: [0, -5, 0], rotate: [0, 2, -2, 0] }
         : mood === "walking"
           ? { y: [0, -6, 0], x: [0, 5, -5, 0] }
           : mood === "reveal"
