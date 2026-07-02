@@ -59,6 +59,33 @@ const categoryWikiWords: Record<DestinationCategory, string[]> = {
   viewpoint: ["展望台", "タワー", "山"],
 };
 
+// Broad word set for the "surprise me" mode: covers the whole prefecture
+// across many kinds of places for far more variety than a 10km geosearch.
+const surpriseWords = [
+  "観光地",
+  "公園",
+  "自然公園",
+  "山",
+  "滝",
+  "湖",
+  "城",
+  "史跡",
+  "古墳",
+  "神社",
+  "寺",
+  "博物館",
+  "美術館",
+  "温泉",
+  "展望台",
+];
+
+// Cache live results per prefecture + genre so re-rolls don't refetch.
+const resultCache = new Map<string, Destination[]>();
+
+function cacheKey(prefecture: Prefecture, categories: DestinationCategory[]) {
+  return `${prefecture.id}|${[...categories].sort().join(",")}`;
+}
+
 function isLikelyAttraction(title: string): boolean {
   return attractionPattern.test(title) && !nonAttractionPattern.test(title);
 }
@@ -99,18 +126,17 @@ function buildDescription(prefecture: Prefecture): string {
   return `${prefecture.nameJa}で見つけた、気ままな週末旅にちょうどいいスポットです。`;
 }
 
-// Search a single per-prefecture Wikipedia category (e.g. "奈良県の温泉") and
-// return the geo-located articles, tagged with the requested app category.
-async function searchCategory(
+// Fetch the geo-located articles in one per-prefecture Wikipedia category
+// (e.g. "奈良県の温泉"), filtered to concrete places.
+async function fetchCategoryPages(
   prefecture: Prefecture,
   word: string,
-  category: DestinationCategory,
-): Promise<Destination[]> {
+): Promise<WikipediaSearchPage[]> {
   const params = new URLSearchParams({
     action: "query",
     generator: "search",
     gsrsearch: `incategory:"${prefecture.nameJa}の${word}"`,
-    gsrlimit: "20",
+    gsrlimit: "30",
     gsrnamespace: "0",
     prop: "coordinates|pageimages",
     piprop: "thumbnail",
@@ -123,24 +149,58 @@ async function searchCategory(
 
   const result = (await response.json()) as WikipediaSearchResponse;
   const pages = result.query?.pages ? Object.values(result.query.pages) : [];
+  return pages.filter(
+    (page) =>
+      page.coordinates?.[0] &&
+      page.title?.trim() &&
+      !adminAreaPattern.test(page.title),
+  );
+}
 
-  return pages
-    .filter(
-      (page) =>
-        page.coordinates?.[0] &&
-        page.title?.trim() &&
-        !adminAreaPattern.test(page.title),
-    )
-    .map((page) => ({
-      id: `wiki-${page.pageid}`,
-      name: page.title,
-      prefectureId: prefecture.id,
-      latitude: page.coordinates![0].lat,
-      longitude: page.coordinates![0].lon,
-      categories: [category],
-      description: buildDescription(prefecture),
-      imageUrl: page.thumbnail?.source,
-    }));
+function pageToDestination(
+  prefecture: Prefecture,
+  page: WikipediaSearchPage,
+  categories: DestinationCategory[],
+): Destination {
+  return {
+    id: `wiki-${page.pageid}`,
+    name: page.title,
+    prefectureId: prefecture.id,
+    latitude: page.coordinates![0].lat,
+    longitude: page.coordinates![0].lon,
+    categories,
+    description: buildDescription(prefecture),
+    imageUrl: page.thumbnail?.source,
+  };
+}
+
+// Run several category searches in parallel and flatten to destinations.
+// `assign` decides each place's app categories from its title/word.
+async function searchWords(
+  prefecture: Prefecture,
+  tasks: { word: string; category?: DestinationCategory }[],
+): Promise<Destination[]> {
+  const settled = await Promise.allSettled(
+    tasks.map((task) =>
+      fetchCategoryPages(prefecture, task.word).then((pages) =>
+        pages.map((page) =>
+          pageToDestination(
+            prefecture,
+            page,
+            task.category ? [task.category] : mapCategoryFromTitle(page.title),
+          ),
+        ),
+      ),
+    ),
+  );
+  if (settled.every((outcome) => outcome.status === "rejected")) {
+    throw new Error("All category searches failed");
+  }
+  return dedupeById(
+    settled.flatMap((outcome) =>
+      outcome.status === "fulfilled" ? outcome.value : [],
+    ),
+  );
 }
 
 // Geosearch around the prefecture centre — used for the "no genre" (おまかせ)
@@ -189,29 +249,23 @@ export async function getAttractionsByPrefecture(
   prefecture: Prefecture,
   categories: DestinationCategory[] = [],
 ): Promise<SearchProviderResult<Destination[]>> {
-  // Genre selected: search Wikipedia's per-prefecture categories so the
+  const key = cacheKey(prefecture, categories);
+  const cached = resultCache.get(key);
+  if (cached) return { data: cached, provider: "live" };
+
+  // Genre selected: search the matching per-prefecture categories so the
   // whole prefecture is covered (onsen, castles... are often far from the
   // city centre and out of geosearch range).
   if (categories.length) {
     try {
-      const queries = categories.flatMap((category) =>
-        categoryWikiWords[category].map((word) =>
-          searchCategory(prefecture, word, category),
-        ),
+      const tasks = categories.flatMap((category) =>
+        categoryWikiWords[category].map((word) => ({ word, category })),
       );
-      const settled = await Promise.allSettled(queries);
-
-      const anyNetworkError = settled.every(
-        (outcome) => outcome.status === "rejected",
-      );
-      if (anyNetworkError) throw new Error("All category searches failed");
-
-      const found = dedupeById(
-        settled.flatMap((outcome) =>
-          outcome.status === "fulfilled" ? outcome.value : [],
-        ),
-      );
-      if (found.length) return { data: found, provider: "live" };
+      const found = await searchWords(prefecture, tasks);
+      if (found.length) {
+        resultCache.set(key, found);
+        return { data: found, provider: "live" };
+      }
 
       // Nothing in the structured categories: try the nearby geosearch and
       // keep only titles that match one of the requested genres.
@@ -229,11 +283,23 @@ export async function getAttractionsByPrefecture(
     }
   }
 
-  // No genre (おまかせ): serendipitous geosearch near the centre.
+  // No genre (おまかせ): search the whole prefecture across many kinds of
+  // places for maximum variety, with a nearby geosearch as a fallback.
   try {
-    const destinations = await geosearchAttractions(prefecture);
-    if (!destinations.length) throw new Error("No attractions returned");
-    return { data: destinations, provider: "live" };
+    const found = await searchWords(
+      prefecture,
+      surpriseWords.map((word) => ({ word })),
+    );
+    if (found.length) {
+      resultCache.set(key, found);
+      return { data: found, provider: "live" };
+    }
+    const nearby = await geosearchAttractions(prefecture);
+    if (nearby.length) {
+      resultCache.set(key, nearby);
+      return { data: nearby, provider: "live" };
+    }
+    throw new Error("No attractions returned");
   } catch {
     return {
       data: [getFallback(prefecture)],
