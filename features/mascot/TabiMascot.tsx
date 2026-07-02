@@ -20,10 +20,13 @@ const moodLabel: Record<MascotMood, string> = {
   reveal: "旅の精タビが行き先を指さしている",
 };
 
+// Sprites share one canvas (538x422) with the bird body normalised to a
+// consistent size and position, so they never jump when the pose changes.
+// The box keeps that aspect ratio and is sized by width.
 const sizeClass: Record<"small" | "medium" | "large", string> = {
-  small: "h-24 w-24",
-  medium: "h-40 w-40",
-  large: "h-48 w-48",
+  small: "w-32",
+  medium: "w-52",
+  large: "w-64",
 };
 
 export function TabiMascot({
@@ -48,7 +51,7 @@ export function TabiMascot({
 
   return (
     <motion.div
-      className={sizeClass[size]}
+      className={`${sizeClass[size]} aspect-[538/422]`}
       animate={animation}
       transition={{
         duration: mood === "thinking" ? 0.9 : mood === "walking" ? 0.6 : 2.8,
