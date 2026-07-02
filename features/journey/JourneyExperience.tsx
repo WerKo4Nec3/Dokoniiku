@@ -177,6 +177,7 @@ const transportIcons: Record<
 const BUDGET_MIN = 5000;
 const BUDGET_MAX = 100000;
 const DISTANCE_MAX = 800;
+const SHUFFLE_COUNT = 4;
 
 // Gemini-powered place insight is optional; the UI only appears when enabled.
 const aiEnabled = process.env.NEXT_PUBLIC_GEMINI_ENABLED === "true";
@@ -536,13 +537,13 @@ export function JourneyExperience() {
     await finalizePlan(randomItem(pool), built.providerMock, built.placesNotice);
   }
 
-  // Shuffle mode: deal five candidate cards and let the user pick one.
+  // Shuffle mode: deal a hand of candidate cards and let the user pick one.
   async function startShuffle() {
     if (!direction || !prefecture) return;
     const built = await buildPlans();
     if (!built) return;
     setShufflePool(built);
-    setShuffleOptions(sampleItems(built.plans, 5));
+    setShuffleOptions(sampleItems(built.plans, SHUFFLE_COUNT));
     setStage("shuffle");
   }
 
@@ -554,12 +555,12 @@ export function JourneyExperience() {
         (plan) => !shown.has(plan.destination.id),
       );
       // Prefer unseen places; top up from the full pool when running low.
-      const next = sampleItems(fresh, 5);
-      if (next.length < 5) {
+      const next = sampleItems(fresh, SHUFFLE_COUNT);
+      if (next.length < SHUFFLE_COUNT) {
         const rest = shufflePool.plans.filter(
           (plan) => !next.some((p) => p.destination.id === plan.destination.id),
         );
-        next.push(...sampleItems(rest, 5 - next.length));
+        next.push(...sampleItems(rest, SHUFFLE_COUNT - next.length));
       }
       return next;
     });
@@ -1166,7 +1167,7 @@ export function JourneyExperience() {
                 icon={<Shuffle size={17} />}
                 className="w-full sm:w-auto"
               >
-                5つの候補から選ぶ
+                4つの候補から選ぶ
               </ActionButton>
             </div>
             <button
@@ -1187,7 +1188,7 @@ export function JourneyExperience() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -18 }}
-          className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-5 py-24 sm:px-6"
+          className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-5 py-24 sm:px-6"
         >
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
@@ -1198,13 +1199,13 @@ export function JourneyExperience() {
                 気になる場所をひとつ選ぼう
               </h2>
               <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-                タビが{prefecture.nameJa}から5つの候補を引いてきたよ。
+                タビが{prefecture.nameJa}から4つの候補を引いてきたよ。
               </p>
             </div>
             <TabiMascot mood="thinking" size="small" />
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2">
             {shuffleOptions.map((plan, index) => (
               <motion.button
                 key={plan.destination.id}
@@ -1261,7 +1262,7 @@ export function JourneyExperience() {
 
           <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-[color:var(--line)] pt-6 sm:flex-row">
             <p className="text-sm font-medium text-[color:var(--muted)]">
-              ピンとこない？ 別の5つを引き直せるよ。
+              ピンとこない？ 別の4つを引き直せるよ。
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <ActionButton

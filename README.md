@@ -22,7 +22,7 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - Wikipedia-powered attraction search (geosearch, plus per-prefecture category search when a genre is selected) with automatic mock fallback
 - Wikipedia article summaries and photos enrich each destination's description, with a templated fallback when no article is found
 - Optional category filter applied at the prefecture step
-- Shuffle mode: deal five candidate cards from the prefecture and pick one (with a redeal option)
+- Shuffle mode: deal four candidate cards from the prefecture and pick one (with a redeal option)
 - Re-roll the destination within the same direction and prefecture (without repeating the current place), or return to the main menu to start over
 - OpenWeather current conditions with automatic mock fallback
 - One-tap link to open the destination directly in Google Maps (centred on the exact coordinates)
