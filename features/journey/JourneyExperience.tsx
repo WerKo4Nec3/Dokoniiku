@@ -35,7 +35,11 @@ import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { getAttractionsByPrefecture } from "@/lib/api/places";
-import { saveJourneyForUser } from "@/lib/api/savedJourneys";
+import {
+  fetchRecentForUser,
+  saveJourneyForUser,
+  saveRecentForUser,
+} from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { getDestinationSummary } from "@/lib/api/wikipedia";
 import {
@@ -279,11 +283,40 @@ export function JourneyExperience() {
     getRecentSnapshot,
     () => "[]",
   );
-  const recentJourneys = parseRecentSnapshot(recentSnapshot);
+  const localRecent = parseRecentSnapshot(recentSnapshot);
+  // When signed in, recent history syncs with the account (cloud); otherwise
+  // it stays in localStorage. null = cloud not loaded yet.
+  const [cloudRecent, setCloudRecent] = useState<JourneyResult[] | null>(null);
+  const recentJourneys = user && cloudRecent ? cloudRecent : localRecent;
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [stage]);
+
+  // On sign-in, load the account's recent history and merge in any local
+  // history made while signed out; keep the newest five, newest first.
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    (async () => {
+      const cloud = await fetchRecentForUser(user.uid).catch(() => []);
+      const local = parseRecentSnapshot(getRecentSnapshot());
+      const merged = [
+        ...cloud,
+        ...local.filter((l) => !cloud.some((c) => c.id === l.id)),
+      ]
+        .sort((a, b) => (b.createdAt ?? "").localeCompare(a.createdAt ?? ""))
+        .slice(0, 5);
+      if (!active) return;
+      setCloudRecent(merged);
+      if (merged.length > cloud.length) {
+        saveRecentForUser(user.uid, merged).catch(() => {});
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   function chooseStart(point: StartPoint) {
     storeStartPoint(point);
@@ -522,8 +555,18 @@ export function JourneyExperience() {
     setNotice([placesNotice, weather.notice].filter(Boolean).join(" "));
     setStage("result");
 
-    // Keep a short local history of the last few generated places.
+    // Keep a short history of the last few generated places: locally always,
+    // and synced to the account when signed in.
     pushRecentJourney(result);
+    if (user) {
+      const base = cloudRecent ?? [];
+      const nextRecent = [
+        result,
+        ...base.filter((item) => item.id !== result.id),
+      ].slice(0, 5);
+      setCloudRecent(nextRecent);
+      saveRecentForUser(user.uid, nextRecent).catch(() => {});
+    }
   }
 
   async function chooseDestination() {

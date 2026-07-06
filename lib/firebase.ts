@@ -1,6 +1,10 @@
 import { getApp, getApps, initializeApp, type FirebaseApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider, type Auth } from "firebase/auth";
-import { getFirestore, type Firestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  type Firestore,
+} from "firebase/firestore";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -27,7 +31,15 @@ let dbInstance: Firestore | null = null;
 if (firebaseEnabled) {
   app = getApps().length ? getApp() : initializeApp(firebaseConfig);
   authInstance = getAuth(app);
-  dbInstance = getFirestore(app);
+  // ignoreUndefinedProperties lets us store journeys that lack an imageUrl
+  // without Firestore rejecting the undefined field.
+  try {
+    dbInstance = initializeFirestore(app, {
+      ignoreUndefinedProperties: true,
+    });
+  } catch {
+    dbInstance = getFirestore(app);
+  }
 }
 
 export const auth = authInstance;
