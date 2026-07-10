@@ -8,6 +8,7 @@ import {
   ExternalLink,
   MapPin,
   RotateCcw,
+  Route,
   Trash2,
   Users,
 } from "lucide-react";
@@ -22,7 +23,9 @@ import {
   categoryLabels,
   formatMinutes,
   formatYen,
+  googleMapsRouteUrl,
   googleMapsSearchUrl,
+  orderByNearest,
   transportLabel,
 } from "@/lib/utils/travel";
 import { JapanTileMap } from "@/components/JapanTileMap";
@@ -102,6 +105,18 @@ export default function SavedPage() {
     () => (journeys ?? []).filter((journey) => journey.visited).length,
     [journeys],
   );
+
+  // With a prefecture selected and 2+ places in it, offer one combined
+  // Google Maps route through all of them (nearest-neighbour order).
+  const routeUrl = useMemo(() => {
+    if (!prefectureFilter || filtered.length < 2) return null;
+    const origin = filtered[0].start;
+    const ordered = orderByNearest(
+      filtered.map((journey) => journey.destination),
+      origin,
+    );
+    return googleMapsRouteUrl([origin, ...ordered]);
+  }, [prefectureFilter, filtered]);
 
   async function handleDelete(id: string) {
     if (!user) return;
@@ -280,6 +295,25 @@ export default function SavedPage() {
                 </button>
               )}
             </div>
+          )}
+
+          {routeUrl && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6"
+            >
+              <a
+                href={routeUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+              >
+                <Route size={16} />
+                この{filtered.length}か所を1つのルートで開く
+                <ExternalLink size={14} />
+              </a>
+            </motion.div>
           )}
 
           {journeys !== null && journeys.length > 0 && filtered.length === 0 && (

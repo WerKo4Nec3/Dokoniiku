@@ -51,12 +51,12 @@ export function AppHeader() {
         <Link
           href="/"
           className="flex items-center gap-2 font-bold text-[color:var(--foreground)]"
-          aria-label="旅コンパス ホーム"
+          aria-label="Dokoniiku ホーム"
         >
           <span className="grid h-9 w-9 place-items-center rounded-full bg-forest text-white">
             <Compass size={19} strokeWidth={2.4} />
           </span>
-          <span className="hidden sm:inline">旅コンパス</span>
+          <span className="hidden sm:inline">Dokoniiku</span>
         </Link>
         <nav className="flex items-center gap-1.5" aria-label="メインナビゲーション">
           {enabled && !loading && !user && (

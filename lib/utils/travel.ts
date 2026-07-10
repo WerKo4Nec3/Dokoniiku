@@ -275,3 +275,83 @@ export const categoryLabels: Record<DestinationCategory, string> = {
   food: "グルメ",
   viewpoint: "絶景",
 };
+
+// ---- Seasonality ----
+
+export type Season = "spring" | "summer" | "autumn" | "winter";
+
+export function seasonForDate(date: Date): Season {
+  const month = date.getMonth() + 1;
+  if (month >= 3 && month <= 5) return "spring";
+  if (month >= 6 && month <= 8) return "summer";
+  if (month >= 9 && month <= 11) return "autumn";
+  return "winter";
+}
+
+export const seasonInfo: Record<
+  Season,
+  { labelJa: string; emoji: string; categories: DestinationCategory[] }
+> = {
+  spring: { labelJa: "春", emoji: "🌸", categories: ["nature", "shrine"] },
+  summer: { labelJa: "夏", emoji: "🌊", categories: ["nature", "viewpoint"] },
+  autumn: {
+    labelJa: "秋",
+    emoji: "🍁",
+    categories: ["nature", "shrine", "history"],
+  },
+  winter: { labelJa: "冬", emoji: "♨️", categories: ["hot-spring", "museum"] },
+};
+
+// Computed once at module load — fine for a value that changes 4x a year.
+export const CURRENT_SEASON: Season = seasonForDate(new Date());
+
+export function isSeasonalMatch(categories: DestinationCategory[]): boolean {
+  const seasonal = seasonInfo[CURRENT_SEASON].categories;
+  return categories.some((category) => seasonal.includes(category));
+}
+
+// ---- Maps helpers ----
+
+export function osmEmbedUrl(point: Coordinates): string {
+  const { latitude, longitude } = point;
+  const bbox = [
+    (longitude - 0.02).toFixed(5),
+    (latitude - 0.012).toFixed(5),
+    (longitude + 0.02).toFixed(5),
+    (latitude + 0.012).toFixed(5),
+  ].join(",");
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude},${longitude}`;
+}
+
+// Chain several stops into one Google Maps directions link.
+export function googleMapsRouteUrl(points: Coordinates[]): string {
+  const path = points
+    .map((p) => `${p.latitude.toFixed(5)},${p.longitude.toFixed(5)}`)
+    .join("/");
+  return `https://www.google.com/maps/dir/${path}`;
+}
+
+// Greedy nearest-neighbour ordering so the route doesn't zigzag.
+export function orderByNearest<T extends Coordinates>(
+  points: T[],
+  from: Coordinates,
+): T[] {
+  const remaining = [...points];
+  const ordered: T[] = [];
+  let cursor: Coordinates = from;
+  while (remaining.length) {
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    remaining.forEach((p, i) => {
+      const d = haversineDistanceKm(cursor, p);
+      if (d < bestDistance) {
+        bestDistance = d;
+        bestIndex = i;
+      }
+    });
+    const next = remaining.splice(bestIndex, 1)[0];
+    ordered.push(next);
+    cursor = next;
+  }
+  return ordered;
+}

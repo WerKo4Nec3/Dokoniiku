@@ -54,20 +54,25 @@ import {
   storeStartPoint,
   subscribeStartPoint,
 } from "@/lib/storage/startPoint";
+import { buildShareCard } from "@/lib/share/shareCard";
 import {
   allTransportModes,
   bestTransport,
   categoryLabels,
+  CURRENT_SEASON,
   estimateBudget,
   estimateTravelTime,
   formatMinutes,
   formatYen,
   googleMapsSearchUrl,
   haversineDistanceKm,
+  isSeasonalMatch,
   NEARBY_PREFECTURE_LIMIT_KM,
+  osmEmbedUrl,
   pickDirection,
   pickPrefecture,
   randomItem,
+  seasonInfo,
   transportInfo,
   transportLabel,
 } from "@/lib/utils/travel";
@@ -115,6 +120,16 @@ function sampleItems<T>(items: T[], count: number): T[] {
     [copy[i], copy[j]] = [copy[j], copy[i]];
   }
   return copy.slice(0, count);
+}
+
+// Half the time, prefer places whose genre fits the current season
+// (spring parks, winter onsen...); otherwise pick freely.
+function pickPlanWithSeasonBoost(pool: Plan[]): Plan {
+  const seasonal = pool.filter((plan) =>
+    isSeasonalMatch(plan.destination.categories),
+  );
+  if (seasonal.length && Math.random() < 0.5) return randomItem(seasonal);
+  return randomItem(pool);
 }
 
 // Shared entrance animation: parents stagger their fadeUp children.
@@ -583,7 +598,11 @@ export function JourneyExperience() {
       if (others.length) pool = others;
     }
 
-    await finalizePlan(randomItem(pool), built.providerMock, built.placesNotice);
+    // With no genre chosen, gently favour places that fit the season.
+    const picked = selectedCategories.length
+      ? randomItem(pool)
+      : pickPlanWithSeasonBoost(pool);
+    await finalizePlan(picked, built.providerMock, built.placesNotice);
   }
 
   // Shuffle mode: deal a hand of candidate cards and let the user pick one.
@@ -674,24 +693,45 @@ export function JourneyExperience() {
     if (!journey) return;
     const mapsUrl = googleMapsSearchUrl(journey.destination);
     const text = [
-      `旅コンパスのタビが選んだ行き先: ${journey.destination.name}（${journey.prefecture.nameJa}）`,
+      `Dokoniikuのタビが選んだ行き先: ${journey.destination.name}（${journey.prefecture.nameJa}）`,
       `${journey.start.name}から約${journey.distanceKm}km ・ ${transportLabel(journey.transport, journey.transfer)}で片道${formatMinutes(journey.estimatedTravelTime)}`,
       `地図: ${mapsUrl}`,
     ].join("\n");
+    const title = `Dokoniiku | ${journey.destination.name}`;
 
     try {
-      // Native share sheet on mobile; clipboard fallback on desktop.
-      if (typeof navigator.share === "function") {
-        await navigator.share({
-          title: `旅コンパス | ${journey.destination.name}`,
-          text,
-          url: window.location.origin,
-        });
+      // Pretty share card: photo + name + mascot + brand.
+      const blob = await buildShareCard(journey).catch(() => null);
+      const file = blob
+        ? new File([blob], "dokoniiku.png", { type: "image/png" })
+        : null;
+
+      // Mobile with image support: share the card itself.
+      if (
+        file &&
+        typeof navigator.canShare === "function" &&
+        navigator.canShare({ files: [file] }) &&
+        typeof navigator.share === "function"
+      ) {
+        await navigator.share({ files: [file], title, text });
         return;
+      }
+      // Mobile without file sharing: plain share sheet.
+      if (typeof navigator.share === "function") {
+        await navigator.share({ title, text, url: window.location.origin });
+        return;
+      }
+      // Desktop: download the card and copy the text.
+      if (blob) {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `dokoniiku-${journey.destination.name}.png`;
+        link.click();
+        window.setTimeout(() => URL.revokeObjectURL(link.href), 5000);
       }
       await navigator.clipboard.writeText(`${text}\n${window.location.origin}`);
       setShareFeedback(true);
-      window.setTimeout(() => setShareFeedback(false), 2200);
+      window.setTimeout(() => setShareFeedback(false), 2600);
     } catch {
       // user cancelled the share sheet — nothing to do
     }
@@ -817,7 +857,7 @@ export function JourneyExperience() {
             >
               旅コンパス
               <span className="mt-3 block text-xl font-semibold text-[color:var(--muted)] sm:text-2xl">
-                Tabi Compass
+                Dokoniiku
               </span>
             </motion.h1>
             <motion.p
@@ -1433,6 +1473,12 @@ export function JourneyExperience() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              {isSeasonalMatch(journey.destination.categories) && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#8a6a17] dark:text-sun">
+                  {seasonInfo[CURRENT_SEASON].emoji}{" "}
+                  {seasonInfo[CURRENT_SEASON].labelJa}のおすすめ
+                </span>
+              )}
               <span className="inline-flex items-center gap-1.5 rounded-full bg-vermilion/10 px-3 py-1.5 text-xs font-bold text-vermilion">
                 <TransportIcon mode={journey.transport} size={14} />
                 {transportLabel(journey.transport, journey.transfer)}
@@ -1543,6 +1589,26 @@ export function JourneyExperience() {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
+                <iframe
+                  title="周辺マップ"
+                  src={osmEmbedUrl(journey.destination)}
+                  className="h-60 w-full border-0"
+                  loading="lazy"
+                />
+                <div className="flex items-center justify-between px-4 py-2 text-[10px] font-medium text-[color:var(--muted)]">
+                  <span>周辺マップ</span>
+                  <a
+                    href={`https://www.openstreetmap.org/?mlat=${journey.destination.latitude}&mlon=${journey.destination.longitude}#map=14/${journey.destination.latitude}/${journey.destination.longitude}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline-offset-2 hover:underline"
+                  >
+                    © OpenStreetMap contributors
+                  </a>
+                </div>
               </div>
 
               <div className="flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
@@ -1712,7 +1778,7 @@ export function JourneyExperience() {
                 icon={shareFeedback ? <Check size={18} /> : <Share2 size={18} />}
                 className="w-full"
               >
-                {shareFeedback ? "コピーしました" : "この旅を共有"}
+                {shareFeedback ? "画像を保存＆コピーしました" : "この旅を共有"}
               </ActionButton>
             </motion.div>
           </motion.div>

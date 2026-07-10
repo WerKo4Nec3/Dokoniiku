@@ -1,6 +1,6 @@
-# Tabi Compass / 旅コンパス
+# Dokoniiku / 旅コンパス
 
-Tabi Compass is a mobile-first Japanese travel discovery PWA for spontaneous weekend trips. Instead of filling out a search form, the user asks an original travel spirit named **Tabi** to choose a direction, a prefecture, and a destination.
+Dokoniiku ("where are we going?") is a mobile-first Japanese travel discovery PWA for spontaneous weekend trips. Instead of filling out a search form, the user asks an original travel spirit named **Tabi** to choose a direction, a prefecture, and a destination.
 
 > 「旅コンパス」は、旅の精タビが方角・都道府県・目的地をランダムに選び、週末の小さな旅を提案するモバイル向けPWAです。
 
@@ -31,7 +31,10 @@ No copyrighted characters, logos, or anime assets are used. Tabi and the visual 
 - Local history of the last five generated places on the landing screen
 - Optional Google sign-in (Firebase) with a save button to keep places in a per-user cloud list, shown as filterable cards (by prefecture, genre, and visited)
 - "Visited" marks on saved places, with a travel-record block: visited counter and a tile-grid map of Japan showing conquered prefectures
-- One-tap share of the result (native share sheet on mobile, clipboard copy on desktop)
+- One-tap share of the result with a generated share card (place photo, name, mascot, and the Dokoniiku brand): shared as an image on mobile, downloaded plus copied text on desktop
+- Seasonal recommendations: with no genre selected, picks gently favour season-appropriate places (spring parks, winter onsen...), with a "season's pick" badge on the result
+- Embedded OpenStreetMap mini map on the result page
+- Combine 2+ saved places in one prefecture into a single Google Maps route (nearest-neighbour ordered)
 - Optional AI day plan (morning/afternoon/evening + weather-aware packing list) alongside the AI place insight
 - Optional AI place insight (Gemini) via a server-side route, surfaced as an "ask AI" button on the result
 - Light and dark themes persisted in `localStorage`

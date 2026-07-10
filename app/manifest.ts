@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "旅コンパス / Tabi Compass",
-    short_name: "旅コンパス",
+    name: "Dokoniiku / 旅コンパス",
+    short_name: "Dokoniiku",
     description: "旅の精タビが、次の週末の行き先を選ぶ旅アプリ。",
     start_url: "/",
     display: "standalone",
