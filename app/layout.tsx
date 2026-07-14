@@ -5,6 +5,7 @@ import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://dokoniiku.com"),
   title: "Dokoniiku | 旅コンパス",
   description:
     "旅の精タビが、次の週末の行き先をランダムに選ぶ日本の小さな旅アプリ。",

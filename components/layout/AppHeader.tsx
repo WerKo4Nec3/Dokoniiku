@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, Compass, LogOut, Moon, Sun } from "lucide-react";
+import { Bookmark, LogOut, Moon, Sun } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
@@ -53,9 +53,12 @@ export function AppHeader() {
           className="flex items-center gap-2 font-bold text-[color:var(--foreground)]"
           aria-label="Dokoniiku ホーム"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-full bg-forest text-white">
-            <Compass size={19} strokeWidth={2.4} />
-          </span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/brand-icon.png"
+            alt=""
+            className="h-9 w-9 rounded-full"
+          />
           <span className="hidden sm:inline">Dokoniiku</span>
         </Link>
         <nav className="flex items-center gap-1.5" aria-label="メインナビゲーション">

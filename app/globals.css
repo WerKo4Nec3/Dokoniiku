@@ -100,28 +100,28 @@ a:focus-visible {
     url("/travel-backdrop.jpg");
 }
 
+/* On phones the landscape photo scales up huge and blurs, so use a crisp
+   brand gradient instead — sharp at any resolution, no stretching. */
 @media (max-width: 720px) {
   .hero-image {
     background-image:
-      linear-gradient(
-        180deg,
-        rgba(247, 244, 237, 0.32) 0%,
-        rgba(247, 244, 237, 0.9) 56%,
-        rgba(247, 244, 237, 1) 100%
+      radial-gradient(
+        130% 55% at 50% 16%,
+        rgba(143, 181, 155, 0.45) 0%,
+        rgba(247, 244, 237, 0) 62%
       ),
-      url("/travel-backdrop.jpg");
-    background-position: 62% center;
+      linear-gradient(180deg, #e7eee4 0%, #f3f0e7 52%, #f7f4ed 100%);
+    background-position: center;
   }
 
   .dark .hero-image {
     background-image:
-      linear-gradient(
-        180deg,
-        rgba(23, 33, 29, 0.22) 0%,
-        rgba(23, 33, 29, 0.88) 56%,
-        rgba(23, 33, 29, 1) 100%
+      radial-gradient(
+        130% 55% at 50% 16%,
+        rgba(46, 106, 74, 0.5) 0%,
+        rgba(23, 33, 29, 0) 62%
       ),
-      url("/travel-backdrop.jpg");
+      linear-gradient(180deg, #1c2b22 0%, #17231d 60%, #131c17 100%);
   }
 }
 

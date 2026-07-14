@@ -1,6 +1,6 @@
-const CACHE_NAME = "tabi-compass-v5";
+const CACHE_NAME = "tabi-compass-v6";
 const OFFLINE_URL = "/offline";
-const APP_SHELL = ["/", "/saved", OFFLINE_URL, "/icon.svg", "/travel-backdrop.jpg"];
+const APP_SHELL = ["/", "/saved", OFFLINE_URL, "/icon-192.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

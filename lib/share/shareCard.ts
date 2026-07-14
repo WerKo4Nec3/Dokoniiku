@@ -95,7 +95,7 @@ export async function buildShareCard(
   const brandWidth = ctx.measureText("Dokoniiku").width;
   ctx.font = `600 22px ${FONT}`;
   ctx.fillStyle = "#c3cec4";
-  ctx.fillText("dokoniiku.netlify.app", 60 + brandWidth + 24, HEIGHT - 46);
+  ctx.fillText("dokoniiku.com", 60 + brandWidth + 24, HEIGHT - 46);
 
   return new Promise((resolve) =>
     canvas.toBlob((blob) => resolve(blob), "image/png"),
