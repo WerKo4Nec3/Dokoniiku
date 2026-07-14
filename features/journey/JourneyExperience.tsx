@@ -308,6 +308,27 @@ export function JourneyExperience() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [stage]);
 
+  // A saved card clicked on /saved hands the journey over via
+  // sessionStorage; reopen it here as the full result view.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = sessionStorage.getItem("dokoniiku:view-journey");
+        if (!raw) return;
+        sessionStorage.removeItem("dokoniiku:view-journey");
+        const item = JSON.parse(raw) as JourneyResult;
+        if (!item?.destination?.name || !item?.prefecture?.nameJa) return;
+        setDirection(item.direction);
+        setPrefecture(item.prefecture);
+        setJourney(item);
+        setStage("result");
+      } catch {
+        // corrupt handoff — stay on the landing
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // On sign-in, load the account's recent history and merge in any local
   // history made while signed out; keep the newest five, newest first.
   useEffect(() => {

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -34,6 +35,7 @@ import type { DestinationCategory, SavedJourney } from "@/types";
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
 export default function SavedPage() {
+  const router = useRouter();
   const { enabled, loading, user, signInWithGoogle } = useAuth();
   // null = not loaded yet (shows the loading state).
   const [journeys, setJourneys] = useState<SavedJourney[] | null>(null);
@@ -124,6 +126,16 @@ export default function SavedPage() {
       current ? current.filter((item) => item.id !== id) : current,
     );
     await deleteUserJourney(user.uid, id).catch(() => {});
+  }
+
+  // Open a saved card as the full result view on the home page.
+  function openJourney(journey: SavedJourney) {
+    try {
+      sessionStorage.setItem("dokoniiku:view-journey", JSON.stringify(journey));
+    } catch {
+      return;
+    }
+    router.push("/");
   }
 
   async function toggleVisited(journey: SavedJourney) {
@@ -333,7 +345,8 @@ export default function SavedPage() {
                   exit={{ opacity: 0, scale: 0.94 }}
                   transition={{ type: "spring", stiffness: 260, damping: 24 }}
                   whileHover={{ y: -4 }}
-                  className="group overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float"
+                  onClick={() => openJourney(journey)}
+                  className="group cursor-pointer overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float transition hover:border-vermilion/50"
                 >
                   <div className="relative h-36 overflow-hidden bg-forest/10">
                     {journey.destination.imageUrl ? (
@@ -367,7 +380,10 @@ export default function SavedPage() {
                       <div className="flex shrink-0 items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => toggleVisited(journey)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleVisited(journey);
+                          }}
                           aria-label={
                             journey.visited ? "未訪問にする" : "行ったに変更"
                           }
@@ -382,7 +398,10 @@ export default function SavedPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(journey.id)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            handleDelete(journey.id);
+                          }}
                           aria-label="削除"
                           className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
                         >
@@ -428,6 +447,7 @@ export default function SavedPage() {
                       href={googleMapsSearchUrl(journey.destination)}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(event) => event.stopPropagation()}
                       className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-forest transition hover:opacity-80 dark:text-[#8fd0b9]"
                     >
                       Google Mapsで見る
