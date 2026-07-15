@@ -50,6 +50,7 @@ export function AppHeader() {
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link
           href="/"
+          onClick={() => window.dispatchEvent(new Event("dokoniiku:go-home"))}
           className="flex items-center gap-2 font-bold text-[color:var(--foreground)]"
           aria-label="Dokoniiku ホーム"
         >

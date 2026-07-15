@@ -6,16 +6,22 @@ import {
   Bike,
   Bookmark,
   Car,
+  Castle,
   Check,
   ChevronRight,
+  Church,
   Cloud,
   CloudRain,
+  Droplets,
   ExternalLink,
   Footprints,
   House,
   Info,
+  Landmark,
+  Leaf,
   LocateFixed,
   MapPin,
+  Mountain,
   RotateCcw,
   Share2,
   Shuffle,
@@ -29,6 +35,7 @@ import {
   Utensils,
   WalletCards,
   Wand2,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
@@ -171,6 +178,16 @@ function ExpandPanel({
 
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
+const categoryIcons: Record<DestinationCategory, LucideIcon> = {
+  nature: Leaf,
+  history: Castle,
+  shrine: Church,
+  museum: Landmark,
+  "hot-spring": Droplets,
+  food: Utensils,
+  viewpoint: Mountain,
+};
+
 // Trip length → how long one-way travel may take (round trip is double).
 const tripLengthOptions: {
   id: TripLengthId;
@@ -307,6 +324,24 @@ export function JourneyExperience() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [stage]);
+
+  // The header logo taps back to the very start even when we're already on
+  // "/" (where a same-route link wouldn't reset our internal stage).
+  useEffect(() => {
+    function goHome() {
+      setStage("landing");
+      setDirection(null);
+      setPrefecture(null);
+      setJourney(null);
+      setNotice(null);
+      setFilterNotice(null);
+      setSelecting(false);
+      setShufflePool(null);
+      setShuffleOptions([]);
+    }
+    window.addEventListener("dokoniiku:go-home", goHome);
+    return () => window.removeEventListener("dokoniiku:go-home", goHome);
+  }, []);
 
   // A saved card clicked on /saved hands the journey over via
   // sessionStorage; reopen it here as the full result view.
@@ -809,37 +844,57 @@ export function JourneyExperience() {
       </button>
 
       <ExpandPanel open={filtersOpen}>
-        <div className="mt-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-4">
-          <p className="text-xs font-bold text-[color:var(--muted)]">
-            気になるジャンル（複数選択可・未選択ならおまかせ）
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {allCategories.map((category) => (
+        <div className="mt-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-[color:var(--foreground)]">
+                気になるジャンル
+              </p>
+              <p className="mt-0.5 text-xs font-medium text-[color:var(--muted)]">
+                複数選択できます・未選択ならタビにおまかせ
+              </p>
+            </div>
+            {filtersActive && (
               <button
-                key={category}
                 type="button"
-                onClick={() => toggleCategory(category)}
-                className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                  selectedCategories.includes(category)
-                    ? "border-vermilion bg-vermilion/10 text-vermilion"
-                    : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                }`}
+                onClick={resetFilters}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-[color:var(--muted)] transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
               >
-                {categoryLabels[category]}
+                <RotateCcw size={12} />
+                クリア
               </button>
-            ))}
+            )}
           </div>
-
-          {filtersActive && (
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] underline-offset-2 transition hover:text-[color:var(--foreground)] hover:underline"
-            >
-              <RotateCcw size={12} />
-              ジャンルをクリア
-            </button>
-          )}
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {allCategories.map((category) => {
+              const Icon = categoryIcons[category];
+              const active = selectedCategories.includes(category);
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleCategory(category)}
+                  className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                    active
+                      ? "border-vermilion bg-vermilion text-white shadow-sm shadow-vermilion/30"
+                      : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground)] hover:border-vermilion/50 hover:bg-vermilion/5"
+                  }`}
+                >
+                  <Icon
+                    size={17}
+                    className={`shrink-0 transition ${
+                      active ? "text-white" : "text-vermilion"
+                    }`}
+                  />
+                  <span className="truncate">{categoryLabels[category]}</span>
+                  {active && (
+                    <Check size={15} className="ml-auto shrink-0 text-white" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </ExpandPanel>
     </div>
@@ -853,13 +908,13 @@ export function JourneyExperience() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0, y: -16 }}
-          className="hero-image relative flex min-h-[calc(100vh-4rem)] items-end overflow-hidden pt-16 md:items-center"
+          className="hero-image relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden pt-16"
         >
           <motion.div
             variants={staggerParent}
             initial="hidden"
             animate="show"
-            className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 pb-12 pt-[38vh] text-center sm:px-6 md:py-20"
+            className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 text-center sm:px-6 md:py-20"
           >
             <motion.div variants={fadeUp} className="mb-2 flex justify-center">
               <TabiMascot mood="idle" />
@@ -1245,7 +1300,7 @@ export function JourneyExperience() {
             </motion.div>
 
             <div className="text-center md:text-left">
-              <div className="mx-auto md:mx-0">
+              <div className="flex justify-center md:justify-start">
                 <TabiMascot
                   mood={selecting ? "thinking" : "reveal"}
                   size="medium"
