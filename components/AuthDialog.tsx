@@ -106,7 +106,7 @@ export function AuthDialog() {
 
   return (
     <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center p-4"
+      className="fixed inset-0 z-[2000] overflow-y-auto"
       role="dialog"
       aria-modal="true"
       aria-label={mode === "login" ? "ログイン" : "新規登録"}
@@ -115,9 +115,10 @@ export function AuthDialog() {
         type="button"
         aria-label="閉じる"
         onClick={() => setOpen(false)}
-        className="absolute inset-0 cursor-default bg-black/50 backdrop-blur-sm"
+        className="fixed inset-0 cursor-default bg-black/50 backdrop-blur-sm"
       />
-      <div className="relative w-full max-w-sm rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float">
+      <div className="flex min-h-full items-center justify-center p-4">
+        <div className="relative w-full max-w-sm rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float">
         <button
           type="button"
           onClick={() => setOpen(false)}
@@ -221,6 +222,7 @@ export function AuthDialog() {
           <GoogleMark />
           Googleで続ける
         </button>
+        </div>
       </div>
     </div>
   );

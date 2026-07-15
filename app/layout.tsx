@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { AuthDialog } from "@/components/AuthDialog";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
         <AuthProvider>
           <AppHeader />
           <main>{children}</main>
+          <AuthDialog />
         </AuthProvider>
         <ServiceWorkerRegister />
       </body>

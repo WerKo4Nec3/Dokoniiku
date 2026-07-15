@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Bookmark, LogIn, LogOut, Moon, Sun } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { AuthDialog, openAuthDialog } from "@/components/AuthDialog";
+import { openAuthDialog } from "@/components/AuthDialog";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -135,7 +135,6 @@ export function AppHeader() {
           </button>
         </nav>
       </div>
-      <AuthDialog />
     </header>
   );
 }
