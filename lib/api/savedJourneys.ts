@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -12,7 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import type { JourneyResult, SavedJourney } from "@/types";
+import type { JourneyResult, PlaceStatus, SavedJourney } from "@/types";
 
 const RECENT_MAX = 5;
 
@@ -49,6 +50,32 @@ export async function setJourneyVisited(
 ) {
   if (!db) return;
   await updateDoc(doc(db, "users", uid, "journeys", id), { visited });
+}
+
+// Move a place through the organizer pipeline. `visited` mirrors "done" so the
+// map and older code keep working.
+export async function setJourneyStatus(
+  uid: string,
+  id: string,
+  status: PlaceStatus,
+) {
+  if (!db) return;
+  await updateDoc(doc(db, "users", uid, "journeys", id), {
+    status,
+    visited: status === "done",
+  });
+}
+
+// Schedule (or, with null, unschedule) a place on the calendar.
+export async function setJourneyDate(
+  uid: string,
+  id: string,
+  date: string | null,
+) {
+  if (!db) return;
+  await updateDoc(doc(db, "users", uid, "journeys", id), {
+    plannedDate: date ?? deleteField(),
+  });
 }
 
 // The recent-history list is kept as one document per user so it syncs

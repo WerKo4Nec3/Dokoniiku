@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
-  Check,
+  CalendarDays,
   ExternalLink,
   MapPin,
   RotateCcw,
@@ -18,8 +18,10 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   deleteUserJourney,
   fetchUserJourneys,
-  setJourneyVisited,
+  setJourneyDate,
+  setJourneyStatus,
 } from "@/lib/api/savedJourneys";
+import { fetchProfile } from "@/lib/api/profile";
 import {
   categoryLabels,
   formatMinutes,
@@ -28,25 +30,38 @@ import {
   googleMapsSearchUrl,
   journeyDifficulty,
   orderByNearest,
+  placeStatusInfo,
+  placeStatusOrder,
+  statusOf,
   transportLabel,
 } from "@/lib/utils/travel";
 import {
   DifficultyBadge,
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
+import { openAuthDialog } from "@/components/AuthDialog";
 import { JapanTileMap } from "@/components/JapanTileMap";
-import type { DestinationCategory, SavedJourney } from "@/types";
+import { StatusPicker } from "@/components/StatusPicker";
+import { CalendarBoard } from "@/components/CalendarBoard";
+import { ProfileCard } from "@/components/ProfileCard";
+import type {
+  DestinationCategory,
+  PlaceStatus,
+  SavedJourney,
+  TabibitoProfile,
+} from "@/types";
 
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
 export default function SavedPage() {
   const router = useRouter();
-  const { enabled, loading, user, signInWithGoogle } = useAuth();
+  const { enabled, loading, user } = useAuth();
   // null = not loaded yet (shows the loading state).
   const [journeys, setJourneys] = useState<SavedJourney[] | null>(null);
   const [prefectureFilter, setPrefectureFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<DestinationCategory | null>(null);
-  const [visitedOnly, setVisitedOnly] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<PlaceStatus | null>(null);
+  const [profile, setProfile] = useState<TabibitoProfile | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -58,6 +73,11 @@ export default function SavedPage() {
       .catch(() => {
         if (active) setJourneys([]);
       });
+    fetchProfile(user.uid)
+      .then((data) => {
+        if (active && data) setProfile(data);
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -87,13 +107,15 @@ export default function SavedPage() {
           (!prefectureFilter || journey.prefecture.id === prefectureFilter) &&
           (!categoryFilter ||
             journey.destination.categories.includes(categoryFilter)) &&
-          (!visitedOnly || journey.visited),
+          (!statusFilter || statusOf(journey) === statusFilter),
       ),
-    [journeys, prefectureFilter, categoryFilter, visitedOnly],
+    [journeys, prefectureFilter, categoryFilter, statusFilter],
   );
 
   const filtersActive =
-    prefectureFilter !== null || categoryFilter !== null || visitedOnly;
+    prefectureFilter !== null ||
+    categoryFilter !== null ||
+    statusFilter !== null;
 
   const savedPrefectureIds = useMemo(
     () => new Set((journeys ?? []).map((journey) => journey.prefecture.id)),
@@ -103,15 +125,30 @@ export default function SavedPage() {
     () =>
       new Set(
         (journeys ?? [])
-          .filter((journey) => journey.visited)
+          .filter((journey) => statusOf(journey) === "done")
           .map((journey) => journey.prefecture.id),
       ),
     [journeys],
   );
   const visitedCount = useMemo(
-    () => (journeys ?? []).filter((journey) => journey.visited).length,
+    () =>
+      (journeys ?? []).filter((journey) => statusOf(journey) === "done").length,
     [journeys],
   );
+
+  // Places the user pinned to a calendar day.
+  const scheduled = useMemo(
+    () => (journeys ?? []).filter((journey) => journey.plannedDate),
+    [journeys],
+  );
+
+  // Count per status for the filter chips.
+  const statusCounts = useMemo(() => {
+    const counts = {} as Record<PlaceStatus, number>;
+    for (const status of placeStatusOrder) counts[status] = 0;
+    for (const journey of journeys ?? []) counts[statusOf(journey)] += 1;
+    return counts;
+  }, [journeys]);
 
   // With a prefecture selected and 2+ places in it, offer one combined
   // Google Maps route through all of them (nearest-neighbour order).
@@ -143,17 +180,32 @@ export default function SavedPage() {
     router.push("/");
   }
 
-  async function toggleVisited(journey: SavedJourney) {
+  async function changeStatus(journey: SavedJourney, status: PlaceStatus) {
     if (!user) return;
-    const next = !journey.visited;
     setJourneys((current) =>
       current
         ? current.map((item) =>
-            item.id === journey.id ? { ...item, visited: next } : item,
+            item.id === journey.id
+              ? { ...item, status, visited: status === "done" }
+              : item,
           )
         : current,
     );
-    await setJourneyVisited(user.uid, journey.id, next).catch(() => {});
+    await setJourneyStatus(user.uid, journey.id, status).catch(() => {});
+  }
+
+  async function changeDate(journey: SavedJourney, date: string | null) {
+    if (!user) return;
+    setJourneys((current) =>
+      current
+        ? current.map((item) =>
+            item.id === journey.id
+              ? { ...item, plannedDate: date ?? undefined }
+              : item,
+          )
+        : current,
+    );
+    await setJourneyDate(user.uid, journey.id, date).catch(() => {});
   }
 
   const chipClass = (active: boolean) =>
@@ -196,16 +248,26 @@ export default function SavedPage() {
           </p>
           <button
             type="button"
-            onClick={() => signInWithGoogle().catch(() => {})}
+            onClick={() => openAuthDialog()}
             className="mt-4 inline-flex items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
           >
-            Googleでログイン
+            ログイン / 新規登録
           </button>
         </div>
       )}
 
       {enabled && user && (
         <div className="mt-8">
+          <div className="mb-8">
+            <ProfileCard
+              uid={user.uid}
+              profile={profile}
+              fallbackName={user.displayName ?? user.email ?? "旅人"}
+              visitedCount={visitedCount}
+              onSaved={setProfile}
+            />
+          </div>
+
           {journeys === null && (
             <p className="text-sm font-medium text-[color:var(--muted)]">
               読み込み中…
@@ -266,14 +328,30 @@ export default function SavedPage() {
           )}
 
           {journeys !== null && journeys.length > 0 && (
+            <div className="mb-8">
+              <CalendarBoard scheduled={scheduled} onOpen={openJourney} />
+            </div>
+          )}
+
+          {journeys !== null && journeys.length > 0 && (
             <div className="mb-6 flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setVisitedOnly((value) => !value)}
-                className={chipClass(visitedOnly)}
-              >
-                ✓ 行った場所
-              </button>
+              {placeStatusOrder.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() =>
+                    setStatusFilter((current) =>
+                      current === status ? null : status,
+                    )
+                  }
+                  className={chipClass(statusFilter === status)}
+                >
+                  {placeStatusInfo[status].emoji} {placeStatusInfo[status].labelJa}
+                  <span className="ml-1 opacity-60">
+                    {statusCounts[status]}
+                  </span>
+                </button>
+              ))}
               <span className="mx-1 h-4 w-px bg-[color:var(--line)]" />
               {prefectureOptions.length > 1 &&
                 prefectureOptions.map((option) => (
@@ -314,7 +392,7 @@ export default function SavedPage() {
                   onClick={() => {
                     setPrefectureFilter(null);
                     setCategoryFilter(null);
-                    setVisitedOnly(false);
+                    setStatusFilter(null);
                   }}
                   className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--muted)] underline-offset-2 transition hover:text-[color:var(--foreground)] hover:underline"
                 >
@@ -390,52 +468,55 @@ export default function SavedPage() {
                       difficulty={difficulty}
                       className="absolute bottom-3 left-3 shadow-sm"
                     />
-                    {journey.visited && (
-                      <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-vermilion px-2.5 py-1 text-[11px] font-black text-white">
-                        <Check size={11} strokeWidth={3} />
-                        行った
-                      </span>
-                    )}
+                    <span
+                      className={`absolute right-3 top-3 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-black shadow-sm ${
+                        placeStatusInfo[statusOf(journey)].className
+                      }`}
+                    >
+                      {placeStatusInfo[statusOf(journey)].emoji}{" "}
+                      {placeStatusInfo[statusOf(journey)].labelJa}
+                    </span>
                   </div>
                   <div className="p-5">
                     <div className="flex items-start justify-between gap-3">
                       <h2 className="text-base font-black leading-snug">
                         {journey.destination.name}
                       </h2>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            toggleVisited(journey);
-                          }}
-                          aria-label={
-                            journey.visited ? "未訪問にする" : "行ったに変更"
-                          }
-                          title={journey.visited ? "未訪問にする" : "行った！"}
-                          className={`grid h-8 w-8 place-items-center rounded-full transition ${
-                            journey.visited
-                              ? "bg-vermilion/15 text-vermilion"
-                              : "text-[color:var(--muted)] hover:bg-forest/10 hover:text-forest dark:hover:text-[#8fd0b9]"
-                          }`}
-                        >
-                          <Check size={15} strokeWidth={3} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            handleDelete(journey.id);
-                          }}
-                          aria-label="削除"
-                          className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          handleDelete(journey.id);
+                        }}
+                        aria-label="削除"
+                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
 
-                    <div className="mt-2 flex flex-wrap gap-1.5">
+                    <div
+                      className="mt-3 flex items-center justify-between gap-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <StatusPicker
+                        status={statusOf(journey)}
+                        onChange={(next) => changeStatus(journey, next)}
+                      />
+                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-bold text-[color:var(--muted)]">
+                        <CalendarDays size={13} />
+                        <input
+                          type="date"
+                          value={journey.plannedDate ?? ""}
+                          onChange={(event) =>
+                            changeDate(journey, event.target.value || null)
+                          }
+                          className="rounded-md border border-[color:var(--line)] bg-[color:var(--background)] px-2 py-1 text-[11px] font-bold outline-none focus:border-vermilion"
+                        />
+                      </label>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       <span className="rounded-full bg-vermilion/10 px-2.5 py-1 text-[11px] font-bold text-vermilion">
                         {transportLabel(journey.transport, journey.transfer)}
                       </span>

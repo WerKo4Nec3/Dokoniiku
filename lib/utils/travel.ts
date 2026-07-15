@@ -6,6 +6,7 @@ import type {
   Difficulty,
   Direction,
   EstimatedBudget,
+  PlaceStatus,
   Prefecture,
   TransportMode,
 } from "@/types";
@@ -299,6 +300,56 @@ export const difficultyInfo: Record<
   epic: { labelJa: "冒険", stars: 4, emoji: "🔥" },
   legendary: { labelJa: "伝説", stars: 5, emoji: "👑" },
 };
+
+// ---- Place status (organizer pipeline) ----
+
+export const placeStatusOrder: PlaceStatus[] = [
+  "planned",
+  "going",
+  "enroute",
+  "exploring",
+  "done",
+];
+
+export const placeStatusInfo: Record<
+  PlaceStatus,
+  { labelJa: string; emoji: string; className: string }
+> = {
+  planned: {
+    labelJa: "計画中",
+    emoji: "💭",
+    className: "bg-[#75b9c8]/18 text-[#2c7c8d] dark:text-[#8fd6e4]",
+  },
+  going: {
+    labelJa: "行く予定",
+    emoji: "🎒",
+    className: "bg-[#7c5cff]/14 text-[#6446c8] dark:text-[#b7a3ff]",
+  },
+  enroute: {
+    labelJa: "移動中",
+    emoji: "🧭",
+    className: "bg-[#e8863e]/16 text-[#b45f1c] dark:text-[#f2ab63]",
+  },
+  exploring: {
+    labelJa: "探索中",
+    emoji: "🔍",
+    className: "bg-sun/25 text-[#8a6a17] dark:text-sun",
+  },
+  done: {
+    labelJa: "完了",
+    emoji: "✅",
+    className: "bg-vermilion/12 text-vermilion",
+  },
+};
+
+// Old records only had a boolean `visited`; treat that as "done".
+export function statusOf(journey: {
+  status?: PlaceStatus;
+  visited?: boolean;
+}): PlaceStatus {
+  if (journey.status) return journey.status;
+  return journey.visited ? "done" : "planned";
+}
 
 export const categoryLabels: Record<DestinationCategory, string> = {
   nature: "自然",

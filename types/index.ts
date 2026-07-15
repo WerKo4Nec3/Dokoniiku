@@ -94,8 +94,27 @@ export type JourneyResult = {
   isMock: boolean;
 };
 
-// A journey stored in the user's cloud list; `visited` marks places the
-// user has actually been to.
+// Where a saved place is in the user's journey: from idea to completed.
+export type PlaceStatus =
+  | "planned"
+  | "going"
+  | "enroute"
+  | "exploring"
+  | "done";
+
+// A journey stored in the user's cloud list. `visited` is kept in sync with
+// status === "done" for backward compatibility (map, share card).
 export type SavedJourney = JourneyResult & {
   visited?: boolean;
+  status?: PlaceStatus;
+  // A day the user plans to go, as "YYYY-MM-DD".
+  plannedDate?: string;
+};
+
+// The user's lightweight "tabibito" (traveller) profile.
+export type TabibitoProfile = {
+  displayName?: string;
+  bio?: string;
+  avatarEmoji?: string;
+  avatarColor?: string;
 };

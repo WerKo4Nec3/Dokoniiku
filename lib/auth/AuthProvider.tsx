@@ -7,7 +7,15 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { onAuthStateChanged, signInWithPopup, signOut, type User } from "firebase/auth";
+import {
+  createUserWithEmailAndPassword,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signOut,
+  updateProfile,
+  type User,
+} from "firebase/auth";
 import { auth, firebaseEnabled, googleProvider } from "@/lib/firebase";
 
 type AuthState = {
@@ -15,6 +23,12 @@ type AuthState = {
   loading: boolean;
   enabled: boolean;
   signInWithGoogle: () => Promise<void>;
+  signUpWithEmail: (
+    email: string,
+    password: string,
+    displayName?: string,
+  ) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
   signOutUser: () => Promise<void>;
 };
 
@@ -38,6 +52,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithPopup(auth, googleProvider);
   }
 
+  async function signUpWithEmail(
+    email: string,
+    password: string,
+    displayName?: string,
+  ) {
+    if (!auth) return;
+    const credential = await createUserWithEmailAndPassword(
+      auth,
+      email,
+      password,
+    );
+    const name = displayName?.trim();
+    if (name) {
+      await updateProfile(credential.user, { displayName: name });
+      // updateProfile doesn't re-emit auth state, so refresh the local user.
+      setUser({ ...credential.user });
+    }
+  }
+
+  async function signInWithEmail(email: string, password: string) {
+    if (!auth) return;
+    await signInWithEmailAndPassword(auth, email, password);
+  }
+
   async function signOutUser() {
     if (!auth) return;
     await signOut(auth);
@@ -45,7 +83,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, enabled: firebaseEnabled, signInWithGoogle, signOutUser }}
+      value={{
+        user,
+        loading,
+        enabled: firebaseEnabled,
+        signInWithGoogle,
+        signUpWithEmail,
+        signInWithEmail,
+        signOutUser,
+      }}
     >
       {children}
     </AuthContext.Provider>
