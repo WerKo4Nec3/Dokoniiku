@@ -26,9 +26,14 @@ import {
   formatYen,
   googleMapsRouteUrl,
   googleMapsSearchUrl,
+  journeyDifficulty,
   orderByNearest,
   transportLabel,
 } from "@/lib/utils/travel";
+import {
+  DifficultyBadge,
+  difficultyFrameClass,
+} from "@/components/DifficultyBadge";
 import { JapanTileMap } from "@/components/JapanTileMap";
 import type { DestinationCategory, SavedJourney } from "@/types";
 
@@ -242,10 +247,21 @@ export default function SavedPage() {
                   </span>
                 </p>
               </div>
-              <JapanTileMap
-                savedIds={savedPrefectureIds}
-                visitedIds={visitedPrefectureIds}
-              />
+              <div className="flex flex-col items-center gap-2">
+                <JapanTileMap
+                  savedIds={savedPrefectureIds}
+                  visitedIds={visitedPrefectureIds}
+                  selectedId={prefectureFilter}
+                  onSelect={(id) =>
+                    setPrefectureFilter((current) =>
+                      current === id ? null : id,
+                    )
+                  }
+                />
+                <p className="text-[10px] font-medium text-[color:var(--muted)]">
+                  タップで都道府県を絞り込み
+                </p>
+              </div>
             </motion.div>
           )}
 
@@ -336,7 +352,12 @@ export default function SavedPage() {
 
           <motion.div layout className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <AnimatePresence mode="popLayout">
-              {filtered.map((journey) => (
+              {filtered.map((journey) => {
+                const difficulty = journeyDifficulty(
+                  journey.distanceKm,
+                  journey.estimatedTravelTime,
+                );
+                return (
                 <motion.article
                   layout
                   key={journey.id}
@@ -346,7 +367,7 @@ export default function SavedPage() {
                   transition={{ type: "spring", stiffness: 260, damping: 24 }}
                   whileHover={{ y: -4 }}
                   onClick={() => openJourney(journey)}
-                  className="group cursor-pointer overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float transition hover:border-vermilion/50"
+                  className={`group cursor-pointer overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float transition hover:border-vermilion/50 ${difficultyFrameClass(difficulty)}`}
                 >
                   <div className="relative h-36 overflow-hidden bg-forest/10">
                     {journey.destination.imageUrl ? (
@@ -365,6 +386,10 @@ export default function SavedPage() {
                     <span className="absolute left-3 top-3 rounded-full bg-black/55 px-2.5 py-1 text-[11px] font-bold text-white backdrop-blur">
                       {journey.prefecture.nameJa}
                     </span>
+                    <DifficultyBadge
+                      difficulty={difficulty}
+                      className="absolute bottom-3 left-3 shadow-sm"
+                    />
                     {journey.visited && (
                       <span className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-full bg-vermilion px-2.5 py-1 text-[11px] font-black text-white">
                         <Check size={11} strokeWidth={3} />
@@ -455,7 +480,8 @@ export default function SavedPage() {
                     </a>
                   </div>
                 </motion.article>
-              ))}
+                );
+              })}
             </AnimatePresence>
           </motion.div>
         </div>

@@ -125,6 +125,74 @@ a:focus-visible {
   }
 }
 
+/* ---- Difficulty card effects ---- */
+
+/* Legendary: a living golden ring around the card (Hearthstone-style). The
+   gradient is masked to the border area and slowly drifts. */
+.card-legendary {
+  position: relative;
+  border-color: transparent !important;
+}
+.card-legendary::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(
+    120deg,
+    #f6d97a,
+    #b8860b,
+    #fff6cf,
+    #e0a437,
+    #f6d97a
+  );
+  background-size: 300% 300%;
+  animation: goldenFrame 4.5s ease infinite;
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 2;
+}
+.card-legendary::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 26px -6px rgba(224, 164, 55, 0.55);
+  pointer-events: none;
+}
+
+@keyframes goldenFrame {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Epic: a warm amber glow + border, no animation. */
+.card-epic {
+  border-color: rgba(224, 134, 62, 0.6) !important;
+  box-shadow: 0 0 0 1px rgba(224, 134, 62, 0.35),
+    0 10px 34px -12px rgba(224, 120, 40, 0.5);
+}
+
+/* Legendary difficulty badge: shimmering gold text on a dark chip. */
+.difficulty-legendary {
+  color: #241a02;
+  background: linear-gradient(120deg, #f6d97a, #f7c948, #fff6cf, #e0a437);
+  background-size: 200% 200%;
+  animation: goldenFrame 4.5s ease infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

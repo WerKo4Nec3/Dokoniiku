@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import dynamic from "next/dynamic";
 import {
   ArrowRight,
   Bike,
@@ -48,7 +49,7 @@ import {
   saveRecentForUser,
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
-import { getDestinationSummary } from "@/lib/api/wikipedia";
+import { getDestinationImages, getDestinationSummary } from "@/lib/api/wikipedia";
 import {
   getRecentSnapshot,
   parseRecentSnapshot,
@@ -74,8 +75,8 @@ import {
   googleMapsSearchUrl,
   haversineDistanceKm,
   isSeasonalMatch,
+  journeyDifficulty,
   NEARBY_PREFECTURE_LIMIT_KM,
-  osmEmbedUrl,
   pickDirection,
   pickPrefecture,
   randomItem,
@@ -94,8 +95,21 @@ import type {
   WeatherInfo,
 } from "@/types";
 import { ActionButton } from "@/components/ui/ActionButton";
+import {
+  DifficultyBadge,
+  difficultyFrameClass,
+} from "@/components/DifficultyBadge";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
+import { ImageGallery } from "./ImageGallery";
 import { JourneySkeleton } from "./JourneySkeleton";
+
+// Leaflet touches `window`, so load the interactive map client-side only.
+const PlaceMap = dynamic(() => import("./PlaceMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-60 w-full animate-pulse bg-[color:var(--surface-muted)]" />
+  ),
+});
 
 type Stage =
   | "landing"
@@ -212,7 +226,9 @@ const transportIcons: Record<
 };
 
 const BUDGET_MIN = 5000;
-const BUDGET_MAX = 100000;
+// The budget slider is a party-total cap, so its ceiling scales with the
+// headcount — 20 people over a long distance can easily pass ¥1,000,000.
+const BUDGET_PER_PERSON_MAX = 60000;
 const DISTANCE_MAX = 800;
 const SHUFFLE_COUNT = 4;
 
@@ -273,6 +289,7 @@ export function JourneyExperience() {
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
   const [scope, setScope] = useState<"nearby" | "all">("nearby");
   const [people, setPeople] = useState(1);
@@ -288,6 +305,9 @@ export function JourneyExperience() {
     "shinkansen",
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
+  // Party-total budget cap grows with the headcount so large groups aren't
+  // stuck under a fixed ¥100,000 ceiling that no plan can ever satisfy.
+  const budgetMax = Math.max(BUDGET_MIN, BUDGET_PER_PERSON_MAX * people);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [shareFeedback, setShareFeedback] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
@@ -324,6 +344,11 @@ export function JourneyExperience() {
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [stage]);
+
+  // Keep the chosen budget within the (headcount-dependent) ceiling.
+  useEffect(() => {
+    setBudget((current) => Math.min(current, budgetMax));
+  }, [budgetMax]);
 
   // The header logo taps back to the very start even when we're already on
   // "/" (where a same-route link wouldn't reset our internal stage).
@@ -547,9 +572,9 @@ export function JourneyExperience() {
 
       if (!plans.length) {
         setFilterNotice(
-          "設定した予算・時間・距離・移動手段に合う場所が見つかりませんでした。条件をゆるめるか、メインに戻って別の方角を試してね。",
+          "設定した条件に合う場所が見つかりませんでした。下の設定で予算・距離・時間・移動手段をゆるめて、もう一度さがしてみてね。",
         );
-        setFiltersOpen(true);
+        setSettingsOpen(true);
         setStage("prefecture");
         return null;
       }
@@ -580,17 +605,23 @@ export function JourneyExperience() {
     const transport = plan.transport;
     const transfer = journeyMode === "custom" ? allowTransfer : false;
 
-    const [weather, summary] = await Promise.all([
+    const [weather, summary, gallery] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
       getDestinationSummary(picked.name),
+      getDestinationImages(picked.name),
     ]);
-    const destination = summary
-      ? {
-          ...picked,
-          description: summary.description,
-          imageUrl: summary.imageUrl ?? picked.imageUrl,
-        }
-      : picked;
+    // Lead with the summary's hero image, then fill in the Commons gallery.
+    const heroImage = summary?.imageUrl ?? picked.imageUrl;
+    const images = [
+      ...(heroImage ? [heroImage] : []),
+      ...gallery.filter((url) => url !== heroImage),
+    ];
+    const destination = {
+      ...picked,
+      description: summary?.description ?? picked.description,
+      imageUrl: heroImage,
+      images,
+    };
     const travel = estimateTravelTime(destination, start, transport, transfer);
     const budgetResult = estimateBudget(
       travel.distanceKm,
@@ -900,6 +931,104 @@ export function JourneyExperience() {
     </div>
   );
 
+  // Budget / time / distance / transport knobs. Shared between the landing
+  // custom mode and the "loosen your settings" panel on the prefecture stage.
+  const customKnobs = (
+    <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 text-left">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold text-[color:var(--muted)]">
+          予算（{people}名・上限）
+        </span>
+        <span className="text-xs font-black">{formatYen(budget)}</span>
+      </div>
+      <input
+        type="range"
+        min={BUDGET_MIN}
+        max={budgetMax}
+        step={1000}
+        value={budget}
+        onChange={(event) => setBudget(Number(event.target.value))}
+        className="mt-2 w-full accent-vermilion"
+      />
+
+      <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
+        旅の日数（移動できる時間）
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {tripLengthOptions.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setTripLength(option.id)}
+            className={chipClass(tripLength === option.id)}
+          >
+            {option.labelJa}
+          </button>
+        ))}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between">
+        <span className="text-xs font-bold text-[color:var(--muted)]">
+          出発地からの距離（上限）
+        </span>
+        <span className="text-xs font-black">約{maxDistance}km</span>
+      </div>
+      <input
+        type="range"
+        min={5}
+        max={DISTANCE_MAX}
+        step={5}
+        value={maxDistance}
+        onChange={(event) => setMaxDistance(Number(event.target.value))}
+        className="mt-2 w-full accent-vermilion"
+      />
+
+      <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
+        移動手段（複数選択可）
+      </p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {allTransportModes.map((mode) => {
+          const Icon = transportIcons[mode];
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => toggleTransport(mode)}
+              className={`inline-flex items-center gap-1.5 ${chipClass(
+                transports.includes(mode),
+              )}`}
+            >
+              <Icon size={13} />
+              {transportInfo[mode].labelJa}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="text-xs font-bold text-[color:var(--muted)]">
+          乗り継ぎ（最後にタクシー等）を許可
+        </span>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={allowTransfer}
+          aria-label="乗り継ぎを許可"
+          onClick={() => setAllowTransfer((value) => !value)}
+          className={`relative h-5 w-9 shrink-0 rounded-full transition ${
+            allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
+          }`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
+              allowTransfer ? "left-[18px]" : "left-0.5"
+            }`}
+          />
+        </button>
+      </div>
+    </div>
+  );
+
   return (
     <AnimatePresence mode="wait">
       {stage === "landing" && (
@@ -1113,99 +1242,7 @@ export function JourneyExperience() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex w-full flex-col items-center"
               >
-                <div className="mt-4 w-full max-w-md rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 text-left">
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-[color:var(--muted)]">
-                      予算（{people}名・上限）
-                    </span>
-                    <span className="text-xs font-black">{formatYen(budget)}</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={BUDGET_MIN}
-                    max={BUDGET_MAX}
-                    step={1000}
-                    value={budget}
-                    onChange={(event) => setBudget(Number(event.target.value))}
-                    className="mt-2 w-full accent-vermilion"
-                  />
-
-                  <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
-                    旅の日数（移動できる時間）
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {tripLengthOptions.map((option) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onClick={() => setTripLength(option.id)}
-                        className={chipClass(tripLength === option.id)}
-                      >
-                        {option.labelJa}
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between">
-                    <span className="text-xs font-bold text-[color:var(--muted)]">
-                      出発地からの距離（上限）
-                    </span>
-                    <span className="text-xs font-black">約{maxDistance}km</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={5}
-                    max={DISTANCE_MAX}
-                    step={5}
-                    value={maxDistance}
-                    onChange={(event) => setMaxDistance(Number(event.target.value))}
-                    className="mt-2 w-full accent-vermilion"
-                  />
-
-                  <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
-                    移動手段（複数選択可）
-                  </p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {allTransportModes.map((mode) => {
-                      const Icon = transportIcons[mode];
-                      return (
-                        <button
-                          key={mode}
-                          type="button"
-                          onClick={() => toggleTransport(mode)}
-                          className={`inline-flex items-center gap-1.5 ${chipClass(
-                            transports.includes(mode),
-                          )}`}
-                        >
-                          <Icon size={13} />
-                          {transportInfo[mode].labelJa}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className="text-xs font-bold text-[color:var(--muted)]">
-                      乗り継ぎ（最後にタクシー等）を許可
-                    </span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={allowTransfer}
-                      aria-label="乗り継ぎを許可"
-                      onClick={() => setAllowTransfer((value) => !value)}
-                      className={`relative h-5 w-9 shrink-0 rounded-full transition ${
-                        allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                          allowTransfer ? "left-[18px]" : "left-0.5"
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
+                <div className="mt-4 w-full max-w-md">{customKnobs}</div>
                 <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
                   予算・時間・距離・移動手段に合う行き先だけを提案します
                 </p>
@@ -1379,6 +1416,22 @@ export function JourneyExperience() {
               </div>
             )}
 
+            {journeyMode === "custom" && (
+              <div className="mt-6 border-t border-[color:var(--line)] pt-6">
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen((open) => !open)}
+                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                >
+                  <SlidersHorizontal size={14} />
+                  予算・距離・時間・移動手段を調整
+                </button>
+                <ExpandPanel open={settingsOpen}>
+                  <div className="mt-3">{customKnobs}</div>
+                </ExpandPanel>
+              </div>
+            )}
+
             <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <ActionButton
                 onClick={chooseDestination}
@@ -1432,58 +1485,65 @@ export function JourneyExperience() {
           </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            {shuffleOptions.map((plan, index) => (
-              <motion.button
-                key={plan.destination.id}
-                type="button"
-                onClick={() => chooseShuffleOption(plan)}
-                initial={{ opacity: 0, y: 24, scale: 0.96 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                transition={{ delay: index * 0.08, type: "spring", stiffness: 260, damping: 22 }}
-                whileHover={{ y: -6, scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-                className="group overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] text-left shadow-float transition hover:border-vermilion/60"
-              >
-                <div className="relative h-32 overflow-hidden bg-forest/10">
-                  {plan.destination.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={plan.destination.imageUrl}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                  ) : (
-                    <div className="grid h-full w-full place-items-center text-forest/50 dark:text-[#8fd0b9]/50">
-                      <MapPin size={32} />
-                    </div>
-                  )}
-                </div>
-                <div className="p-4">
-                  <h3 className="text-sm font-black leading-snug">
-                    {plan.destination.name}
-                  </h3>
-                  <p className="mt-1 text-xs font-bold text-[color:var(--muted)]">
-                    {start.name}から約
-                    {haversineDistanceKm(start, plan.destination)}km ・{" "}
-                    {transportLabel(
-                      plan.transport,
-                      journeyMode === "custom" ? allowTransfer : false,
+            {shuffleOptions.map((plan, index) => {
+              const distanceKm = haversineDistanceKm(start, plan.destination);
+              const difficulty = journeyDifficulty(distanceKm);
+              return (
+                <motion.button
+                  key={plan.destination.id}
+                  type="button"
+                  onClick={() => chooseShuffleOption(plan)}
+                  initial={{ opacity: 0, y: 24, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ delay: index * 0.08, type: "spring", stiffness: 260, damping: 22 }}
+                  whileHover={{ y: -6, scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`group overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] text-left shadow-float transition hover:border-vermilion/60 ${difficultyFrameClass(difficulty)}`}
+                >
+                  <div className="relative h-32 overflow-hidden bg-forest/10">
+                    {plan.destination.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={plan.destination.imageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-forest/50 dark:text-[#8fd0b9]/50">
+                        <MapPin size={32} />
+                      </div>
                     )}
-                  </p>
-                  <div className="mt-2.5 flex flex-wrap gap-1.5">
-                    {plan.destination.categories.slice(0, 2).map((category) => (
-                      <span
-                        key={category}
-                        className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
-                      >
-                        {categoryLabels[category]}
-                      </span>
-                    ))}
+                    <DifficultyBadge
+                      difficulty={difficulty}
+                      className="absolute right-2 top-2 shadow-sm"
+                    />
                   </div>
-                </div>
-              </motion.button>
-            ))}
+                  <div className="p-4">
+                    <h3 className="text-sm font-black leading-snug">
+                      {plan.destination.name}
+                    </h3>
+                    <p className="mt-1 text-xs font-bold text-[color:var(--muted)]">
+                      {start.name}から約{distanceKm}km ・{" "}
+                      {transportLabel(
+                        plan.transport,
+                        journeyMode === "custom" ? allowTransfer : false,
+                      )}
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {plan.destination.categories.slice(0, 2).map((category) => (
+                        <span
+                          key={category}
+                          className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                        >
+                          {categoryLabels[category]}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
 
           <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-[color:var(--line)] pt-6 sm:flex-row">
@@ -1549,6 +1609,12 @@ export function JourneyExperience() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
+              <DifficultyBadge
+                difficulty={journeyDifficulty(
+                  journey.distanceKm,
+                  journey.estimatedTravelTime,
+                )}
+              />
               {isSeasonalMatch(journey.destination.categories) && (
                 <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#8a6a17] dark:text-sun">
                   {seasonInfo[CURRENT_SEASON].emoji}{" "}
@@ -1584,14 +1650,22 @@ export function JourneyExperience() {
             className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_.8fr]"
           >
             <motion.div variants={fadeUp} className="space-y-6">
-              <div className="relative h-60 overflow-hidden rounded-lg sm:h-80">
-                <div
-                  className="absolute inset-0 bg-cover bg-center"
-                  style={{
-                    backgroundImage: `url('${journey.destination.imageUrl ?? "/travel-backdrop.jpg"}')`,
-                  }}
-                />
-              </div>
+              <ImageGallery
+                images={
+                  journey.destination.images?.length
+                    ? journey.destination.images
+                    : journey.destination.imageUrl
+                      ? [journey.destination.imageUrl]
+                      : []
+                }
+                alt={journey.destination.name}
+                frameClass={difficultyFrameClass(
+                  journeyDifficulty(
+                    journey.distanceKm,
+                    journey.estimatedTravelTime,
+                  ),
+                )}
+              />
 
               <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
                 <h3 className="text-sm font-black">この場所について</h3>
@@ -1668,11 +1742,11 @@ export function JourneyExperience() {
               </div>
 
               <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
-                <iframe
-                  title="周辺マップ"
-                  src={osmEmbedUrl(journey.destination)}
-                  className="h-60 w-full border-0"
-                  loading="lazy"
+                <PlaceMap
+                  key={journey.destination.id}
+                  latitude={journey.destination.latitude}
+                  longitude={journey.destination.longitude}
+                  name={journey.destination.name}
                 />
                 <div className="flex items-center justify-between px-4 py-2 text-[10px] font-medium text-[color:var(--muted)]">
                   <span>周辺マップ</span>

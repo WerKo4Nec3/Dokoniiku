@@ -3,6 +3,7 @@ import type {
   Coordinates,
   Destination,
   DestinationCategory,
+  Difficulty,
   Direction,
   EstimatedBudget,
   Prefecture,
@@ -266,6 +267,39 @@ export function formatYen(value: number) {
   }).format(value);
 }
 
+// ---- Difficulty (trip "rarity" tier) ----
+
+// One-way distance is the main driver of how big an expedition this is; long
+// travel time nudges the score up a little. Tuned so a quick local outing is
+// "easy" and a cross-country haul (Hokkaido/Okinawa) reaches "legendary".
+export function journeyDifficulty(distanceKm: number, minutes = 0): Difficulty {
+  const score = distanceKm + minutes * 0.5;
+  if (score < 60) return "easy";
+  if (score < 160) return "medium";
+  if (score < 360) return "hard";
+  if (score < 680) return "epic";
+  return "legendary";
+}
+
+export const difficultyOrder: Difficulty[] = [
+  "easy",
+  "medium",
+  "hard",
+  "epic",
+  "legendary",
+];
+
+export const difficultyInfo: Record<
+  Difficulty,
+  { labelJa: string; stars: number; emoji: string }
+> = {
+  easy: { labelJa: "気軽", stars: 1, emoji: "🍃" },
+  medium: { labelJa: "ふつう", stars: 2, emoji: "🚃" },
+  hard: { labelJa: "本格", stars: 3, emoji: "⛰️" },
+  epic: { labelJa: "冒険", stars: 4, emoji: "🔥" },
+  legendary: { labelJa: "伝説", stars: 5, emoji: "👑" },
+};
+
 export const categoryLabels: Record<DestinationCategory, string> = {
   nature: "自然",
   history: "歴史",
@@ -311,17 +345,6 @@ export function isSeasonalMatch(categories: DestinationCategory[]): boolean {
 }
 
 // ---- Maps helpers ----
-
-export function osmEmbedUrl(point: Coordinates): string {
-  const { latitude, longitude } = point;
-  const bbox = [
-    (longitude - 0.02).toFixed(5),
-    (latitude - 0.012).toFixed(5),
-    (longitude + 0.02).toFixed(5),
-    (latitude + 0.012).toFixed(5),
-  ].join(",");
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude},${longitude}`;
-}
 
 // Chain several stops into one Google Maps directions link.
 export function googleMapsRouteUrl(points: Coordinates[]): string {

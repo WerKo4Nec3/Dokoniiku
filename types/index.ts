@@ -26,6 +26,8 @@ export type Prefecture = Coordinates & {
   accent: string;
 };
 
+export type Difficulty = "easy" | "medium" | "hard" | "epic" | "legendary";
+
 export type DestinationCategory =
   | "nature"
   | "history"
@@ -42,6 +44,8 @@ export type Destination = Coordinates & {
   categories: DestinationCategory[];
   description: string;
   imageUrl?: string;
+  // Extra photos pulled from Wikimedia Commons for the result gallery.
+  images?: string[];
 };
 
 export type TransportMode =
