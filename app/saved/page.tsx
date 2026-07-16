@@ -317,9 +317,9 @@ export default function SavedPage() {
                   transition={{ type: "spring", stiffness: 260, damping: 24 }}
                   whileHover={{ y: -4 }}
                   onClick={() => openJourney(journey)}
-                  className={`group cursor-pointer overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float transition hover:border-vermilion/50 ${difficultyFrameClass(difficulty)}`}
+                  className={`group cursor-pointer rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float transition hover:border-vermilion/50 ${difficultyFrameClass(difficulty)}`}
                 >
-                  <div className="relative h-36 overflow-hidden bg-forest/10">
+                  <div className="relative h-36 overflow-hidden rounded-t-[7px] bg-forest/10">
                     {journey.destination.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img

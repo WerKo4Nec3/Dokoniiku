@@ -49,7 +49,12 @@ import {
   saveRecentForUser,
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
-import { getDestinationImages, getDestinationSummary } from "@/lib/api/wikipedia";
+import {
+  getDestinationImages,
+  getDestinationSummary,
+  getNearbyPhotos,
+  looksLikePhoto,
+} from "@/lib/api/wikipedia";
 import {
   getRecentSnapshot,
   parseRecentSnapshot,
@@ -610,12 +615,21 @@ export function JourneyExperience() {
       getDestinationSummary(picked.name),
       getDestinationImages(picked.name),
     ]);
-    // Lead with the summary's hero image, then fill in the Commons gallery.
-    const heroImage = summary?.imageUrl ?? picked.imageUrl;
-    const images = [
-      ...(heroImage ? [heroImage] : []),
-      ...gallery.filter((url) => url !== heroImage),
+    // Lead with the article's hero image — unless it's a location/relief map
+    // (common on small-place articles) — then fill in the Commons gallery.
+    const candidateHero = summary?.imageUrl ?? picked.imageUrl;
+    let images = [
+      ...(candidateHero && looksLikePhoto(candidateHero)
+        ? [candidateHero]
+        : []),
+      ...gallery.filter((url) => url !== candidateHero),
     ];
+    if (!images.length) {
+      // No usable photo on the article at all: fall back to photos taken
+      // near the place's coordinates.
+      images = await getNearbyPhotos(picked.latitude, picked.longitude);
+    }
+    const heroImage = images[0];
     const destination = {
       ...picked,
       description: summary?.description ?? picked.description,

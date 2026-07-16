@@ -245,13 +245,21 @@ export default function CalendarPage() {
                     >
                       {date.getDate()}
                     </div>
-                    <div className="mt-0.5 grid grid-cols-2 gap-0.5">
+                    <div
+                      className={`mt-0.5 ${
+                        items.length > 1 ? "grid grid-cols-2 gap-0.5" : ""
+                      }`}
+                    >
                       {items.slice(0, 4).map((journey) => (
                         <div
                           key={journey.id}
                           {...dragHandlers(journey)}
                           title={journey.destination.name}
-                          className="aspect-square cursor-grab overflow-hidden rounded bg-forest/15 bg-cover bg-center active:cursor-grabbing"
+                          className={`cursor-grab overflow-hidden rounded bg-forest/15 bg-cover bg-center active:cursor-grabbing ${
+                            items.length > 1
+                              ? "aspect-square"
+                              : "aspect-[4/3] w-full"
+                          }`}
                           style={{
                             ...(journey.destination.imageUrl
                               ? {

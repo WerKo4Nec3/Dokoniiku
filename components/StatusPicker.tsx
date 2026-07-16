@@ -47,7 +47,7 @@ export function StatusPicker({
       {open && (
         <div
           role="listbox"
-          className="absolute right-0 z-20 mt-1 w-32 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] py-1 shadow-float"
+          className="absolute left-0 top-full z-30 mt-1 w-36 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] py-1 shadow-float"
         >
           {placeStatusOrder.map((option) => {
             const optionInfo = placeStatusInfo[option];
