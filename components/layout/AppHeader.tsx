@@ -1,7 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Bookmark, LogIn, LogOut, Moon, Sun } from "lucide-react";
+import {
+  Bookmark,
+  CalendarDays,
+  CircleUserRound,
+  LogIn,
+  LogOut,
+  Moon,
+  Sun,
+  Users,
+} from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { openAuthDialog } from "@/components/AuthDialog";
@@ -109,6 +118,30 @@ export function AppHeader() {
                     >
                       <Bookmark size={16} />
                       保存した旅
+                    </Link>
+                    <Link
+                      href="/calendar"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <CalendarDays size={16} />
+                      旅のカレンダー
+                    </Link>
+                    <Link
+                      href="/friends"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <Users size={16} />
+                      旅の仲間
+                    </Link>
+                    <Link
+                      href="/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <CircleUserRound size={16} />
+                      プロフィール
                     </Link>
                     <button
                       type="button"

@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
-  CalendarDays,
   ExternalLink,
   MapPin,
   RotateCcw,
@@ -14,12 +12,9 @@ import {
   Users,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { useAuth } from "@/lib/auth/AuthProvider";
+import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import {
   deleteUserJourney,
-  fetchUserJourneys,
-  saveJourneyForUser,
-  setJourneyDate,
   setJourneyStatus,
 } from "@/lib/api/savedJourneys";
 import { fetchProfile } from "@/lib/api/profile";
@@ -41,15 +36,11 @@ import {
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { JapanTileMap } from "@/components/JapanTileMap";
+import { CabinetNav } from "@/components/CabinetNav";
 import { StatusPicker } from "@/components/StatusPicker";
-import { CalendarBoard } from "@/components/CalendarBoard";
-import { ProfileCard } from "@/components/ProfileCard";
-import { FriendsPanel } from "@/components/FriendsPanel";
 import { ShareToFriendButton } from "@/components/ShareToFriendButton";
 import type {
   DestinationCategory,
-  JourneyResult,
   PlaceStatus,
   SavedJourney,
   TabibitoProfile,
@@ -58,10 +49,8 @@ import type {
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
 export default function SavedPage() {
-  const router = useRouter();
-  const { enabled, loading, user } = useAuth();
-  // null = not loaded yet (shows the loading state).
-  const [journeys, setJourneys] = useState<SavedJourney[] | null>(null);
+  const { enabled, loading, user, journeys, setJourneys } = useUserJourneys();
+  const openJourney = useOpenJourney();
   const [prefectureFilter, setPrefectureFilter] = useState<string | null>(null);
   const [categoryFilter, setCategoryFilter] = useState<DestinationCategory | null>(null);
   const [statusFilter, setStatusFilter] = useState<PlaceStatus | null>(null);
@@ -70,13 +59,6 @@ export default function SavedPage() {
   useEffect(() => {
     if (!user) return;
     let active = true;
-    fetchUserJourneys(user.uid)
-      .then((items) => {
-        if (active) setJourneys(items);
-      })
-      .catch(() => {
-        if (active) setJourneys([]);
-      });
     fetchProfile(user.uid)
       .then((data) => {
         if (active && data) setProfile(data);
@@ -121,31 +103,6 @@ export default function SavedPage() {
     categoryFilter !== null ||
     statusFilter !== null;
 
-  const savedPrefectureIds = useMemo(
-    () => new Set((journeys ?? []).map((journey) => journey.prefecture.id)),
-    [journeys],
-  );
-  const visitedPrefectureIds = useMemo(
-    () =>
-      new Set(
-        (journeys ?? [])
-          .filter((journey) => statusOf(journey) === "done")
-          .map((journey) => journey.prefecture.id),
-      ),
-    [journeys],
-  );
-  const visitedCount = useMemo(
-    () =>
-      (journeys ?? []).filter((journey) => statusOf(journey) === "done").length,
-    [journeys],
-  );
-
-  // Places the user pinned to a calendar day.
-  const scheduled = useMemo(
-    () => (journeys ?? []).filter((journey) => journey.plannedDate),
-    [journeys],
-  );
-
   // Count per status for the filter chips.
   const statusCounts = useMemo(() => {
     const counts = {} as Record<PlaceStatus, number>;
@@ -174,16 +131,6 @@ export default function SavedPage() {
     await deleteUserJourney(user.uid, id).catch(() => {});
   }
 
-  // Open a saved card as the full result view on the home page.
-  function openJourney(journey: SavedJourney) {
-    try {
-      sessionStorage.setItem("dokoniiku:view-journey", JSON.stringify(journey));
-    } catch {
-      return;
-    }
-    router.push("/");
-  }
-
   async function changeStatus(journey: SavedJourney, status: PlaceStatus) {
     if (!user) return;
     setJourneys((current) =>
@@ -196,31 +143,6 @@ export default function SavedPage() {
         : current,
     );
     await setJourneyStatus(user.uid, journey.id, status).catch(() => {});
-  }
-
-  // A friend's shared card, adopted into my own collection.
-  async function saveSharedJourney(journey: JourneyResult) {
-    if (!user) return;
-    await saveJourneyForUser(user.uid, journey).catch(() => {});
-    setJourneys((current) => {
-      const base = current ?? [];
-      if (base.some((item) => item.id === journey.id)) return current;
-      return [journey, ...base];
-    });
-  }
-
-  async function changeDate(journey: SavedJourney, date: string | null) {
-    if (!user) return;
-    setJourneys((current) =>
-      current
-        ? current.map((item) =>
-            item.id === journey.id
-              ? { ...item, plannedDate: date ?? undefined }
-              : item,
-          )
-        : current,
-    );
-    await setJourneyDate(user.uid, journey.id, date).catch(() => {});
   }
 
   const chipClass = (active: boolean) =>
@@ -240,14 +162,12 @@ export default function SavedPage() {
         旅にもどる
       </Link>
 
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
         <h1 className="mt-4 text-3xl font-black sm:text-4xl">保存した旅</h1>
         <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
           保存した行き先のコレクション。次の旅のヒントに。
         </p>
+        <CabinetNav />
       </motion.div>
 
       {!enabled && (
@@ -273,24 +193,6 @@ export default function SavedPage() {
 
       {enabled && user && (
         <div className="mt-8">
-          <div className="mb-8 grid gap-4 lg:grid-cols-[1.2fr_.8fr] lg:items-start">
-            <ProfileCard
-              uid={user.uid}
-              profile={profile}
-              fallbackName={user.displayName ?? user.email ?? "旅人"}
-              visitedCount={visitedCount}
-              onSaved={setProfile}
-            />
-            <FriendsPanel
-              uid={user.uid}
-              profile={profile}
-              fallbackName={user.displayName ?? user.email ?? "旅人"}
-              visitedCount={visitedCount}
-              onOpenJourney={(journey) => openJourney(journey)}
-              onSaveShared={saveSharedJourney}
-            />
-          </div>
-
           {journeys === null && (
             <p className="text-sm font-medium text-[color:var(--muted)]">
               読み込み中…
@@ -301,59 +203,6 @@ export default function SavedPage() {
             <p className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">
               まだ保存された旅はありません。ホームで行き先を見つけてみよう。
             </p>
-          )}
-
-          {journeys !== null && journeys.length > 0 && (
-            <motion.div
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-8 flex flex-col items-start justify-between gap-6 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 sm:flex-row sm:items-center"
-            >
-              <div>
-                <h2 className="text-sm font-black">旅の記録</h2>
-                <p className="mt-3 text-3xl font-black">
-                  {visitedPrefectureIds.size}
-                  <span className="text-base font-bold text-[color:var(--muted)]">
-                    {" "}
-                    / 47 都道府県
-                  </span>
-                </p>
-                <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
-                  行った場所 {visitedCount}件 ・ 保存 {journeys.length}件
-                </p>
-                <p className="mt-3 flex items-center gap-3 text-[11px] font-bold text-[color:var(--muted)]">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-[3px] bg-vermilion" />
-                    行った
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <span className="h-2.5 w-2.5 rounded-[3px] bg-forest/50 dark:bg-[#8fd0b9]/50" />
-                    保存済み
-                  </span>
-                </p>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <JapanTileMap
-                  savedIds={savedPrefectureIds}
-                  visitedIds={visitedPrefectureIds}
-                  selectedId={prefectureFilter}
-                  onSelect={(id) =>
-                    setPrefectureFilter((current) =>
-                      current === id ? null : id,
-                    )
-                  }
-                />
-                <p className="text-[10px] font-medium text-[color:var(--muted)]">
-                  タップで都道府県を絞り込み
-                </p>
-              </div>
-            </motion.div>
-          )}
-
-          {journeys !== null && journeys.length > 0 && (
-            <div className="mb-8">
-              <CalendarBoard scheduled={scheduled} onOpen={openJourney} />
-            </div>
           )}
 
           {journeys !== null && journeys.length > 0 && (
@@ -538,17 +387,14 @@ export default function SavedPage() {
                         status={statusOf(journey)}
                         onChange={(next) => changeStatus(journey, next)}
                       />
-                      <label className="inline-flex cursor-pointer items-center gap-1.5 text-[11px] font-bold text-[color:var(--muted)]">
-                        <CalendarDays size={13} />
-                        <input
-                          type="date"
-                          value={journey.plannedDate ?? ""}
-                          onChange={(event) =>
-                            changeDate(journey, event.target.value || null)
-                          }
-                          className="rounded-md border border-[color:var(--line)] bg-[color:var(--background)] px-2 py-1 text-[11px] font-bold outline-none focus:border-vermilion"
-                        />
-                      </label>
+                      {journey.plannedDate && (
+                        <Link
+                          href="/calendar"
+                          className="text-[11px] font-bold text-vermilion underline-offset-2 hover:underline"
+                        >
+                          {journey.plannedDate.slice(5).replace("-", "/")} 予定
+                        </Link>
+                      )}
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-1.5">

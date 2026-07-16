@@ -9,6 +9,7 @@ import {
 } from "react";
 import {
   createUserWithEmailAndPassword,
+  linkWithPopup,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithPopup,
@@ -29,6 +30,8 @@ type AuthState = {
     displayName?: string,
   ) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  // Attach a Google account to the signed-in (email/password) user.
+  linkGoogleAccount: () => Promise<void>;
   signOutUser: () => Promise<void>;
 };
 
@@ -76,6 +79,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   }
 
+  async function linkGoogleAccount() {
+    if (!auth?.currentUser) return;
+    await linkWithPopup(auth.currentUser, googleProvider);
+    // Linking doesn't re-emit auth state; surface the merged providers/photo.
+    setUser(auth.currentUser ? { ...auth.currentUser } : null);
+  }
+
   async function signOutUser() {
     if (!auth) return;
     await signOut(auth);
@@ -90,6 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signInWithGoogle,
         signUpWithEmail,
         signInWithEmail,
+        linkGoogleAccount,
         signOutUser,
       }}
     >

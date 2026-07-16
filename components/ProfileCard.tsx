@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, Link2, Pencil, X } from "lucide-react";
 import type { TabibitoProfile } from "@/types";
 import { saveProfile } from "@/lib/api/profile";
 
@@ -34,26 +34,38 @@ function levelFor(visited: number): { title: string; level: number } {
 export function ProfileCard({
   uid,
   profile,
-  fallbackName,
+  authName,
+  photoURL,
+  hasGoogle,
   visitedCount,
   onSaved,
+  onLinkGoogle,
 }: {
   uid: string;
   profile: TabibitoProfile | null;
-  fallbackName: string;
+  // Name/photo arriving from the auth provider (Google) — empty for
+  // email/password accounts until the user fills the profile in.
+  authName?: string | null;
+  photoURL?: string | null;
+  hasGoogle: boolean;
   visitedCount: number;
   onSaved: (profile: TabibitoProfile) => void;
+  onLinkGoogle?: () => Promise<void>;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [name, setName] = useState(profile?.displayName ?? "");
+  const [linkBusy, setLinkBusy] = useState(false);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [name, setName] = useState(profile?.displayName ?? authName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
-  const [emoji, setEmoji] = useState(profile?.avatarEmoji ?? AVATAR_EMOJI[0]);
+  const [emoji, setEmoji] = useState(profile?.avatarEmoji ?? "");
   const [color, setColor] = useState(profile?.avatarColor ?? AVATAR_COLORS[0]);
 
-  const displayName = profile?.displayName?.trim() || fallbackName || "旅人";
-  const avatarEmoji = profile?.avatarEmoji ?? "🐣";
+  const displayName = profile?.displayName?.trim() || authName?.trim() || "旅人";
   const avatarColor = profile?.avatarColor ?? AVATAR_COLORS[0];
+  // A chosen emoji wins; otherwise the Google photo; otherwise the chick.
+  const avatarEmoji = profile?.avatarEmoji;
+  const showPhoto = !avatarEmoji && Boolean(photoURL);
   const rank = levelFor(visitedCount);
 
   async function handleSave() {
@@ -61,7 +73,7 @@ export function ProfileCard({
     const next: TabibitoProfile = {
       displayName: name.trim() || undefined,
       bio: bio.trim() || undefined,
-      avatarEmoji: emoji,
+      avatarEmoji: emoji || undefined,
       avatarColor: color,
     };
     try {
@@ -70,6 +82,28 @@ export function ProfileCard({
       setEditing(false);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleLink() {
+    if (!onLinkGoogle) return;
+    setLinkBusy(true);
+    setLinkError(null);
+    try {
+      await onLinkGoogle();
+    } catch (error) {
+      const code =
+        typeof error === "object" && error && "code" in error
+          ? String((error as { code: unknown }).code)
+          : "";
+      setLinkError(
+        code === "auth/credential-already-in-use" ||
+          code === "auth/email-already-in-use"
+          ? "このGoogleアカウントは別のユーザーに連携済みです。"
+          : "連携できませんでした。もう一度お試しください。",
+      );
+    } finally {
+      setLinkBusy(false);
     }
   }
 
@@ -88,7 +122,30 @@ export function ProfileCard({
           </button>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-2">
+        <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
+          アイコン{photoURL ? "（未選択ならGoogleの写真）" : ""}
+        </p>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {photoURL && (
+            <button
+              type="button"
+              onClick={() => setEmoji("")}
+              aria-label="Googleの写真を使う"
+              className={`h-9 w-9 overflow-hidden rounded-full border transition ${
+                emoji === ""
+                  ? "border-vermilion ring-2 ring-vermilion/30"
+                  : "border-[color:var(--line)]"
+              }`}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={photoURL}
+                alt=""
+                className="h-full w-full object-cover"
+                referrerPolicy="no-referrer"
+              />
+            </button>
+          )}
           {AVATAR_EMOJI.map((option) => (
             <button
               key={option}
@@ -96,7 +153,7 @@ export function ProfileCard({
               onClick={() => setEmoji(option)}
               className={`grid h-9 w-9 place-items-center rounded-full border text-lg transition ${
                 emoji === option
-                  ? "border-vermilion"
+                  ? "border-vermilion ring-2 ring-vermilion/30"
                   : "border-[color:var(--line)]"
               }`}
             >
@@ -162,41 +219,71 @@ export function ProfileCard({
   }
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-      <div
-        className="grid h-16 w-16 shrink-0 place-items-center rounded-full text-3xl"
-        style={{ backgroundColor: `${avatarColor}22` }}
-      >
-        {avatarEmoji}
-      </div>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h2 className="truncate text-lg font-black">{displayName}</h2>
-          <span
-            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black text-white"
-            style={{ backgroundColor: avatarColor }}
-          >
-            Lv.{rank.level} {rank.title}
-          </span>
-        </div>
-        {profile?.bio ? (
-          <p className="mt-1 line-clamp-2 text-xs font-medium text-[color:var(--muted)]">
-            {profile.bio}
-          </p>
+    <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+      <div className="flex items-center gap-4">
+        {showPhoto ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photoURL ?? ""}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="h-16 w-16 shrink-0 rounded-full object-cover"
+          />
         ) : (
-          <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
-            制覇した都道府県で旅人ランクが上がります。
-          </p>
+          <div
+            className="grid h-16 w-16 shrink-0 place-items-center rounded-full text-3xl"
+            style={{ backgroundColor: `${avatarColor}22` }}
+          >
+            {avatarEmoji ?? "🐣"}
+          </div>
         )}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h2 className="truncate text-lg font-black">{displayName}</h2>
+            <span
+              className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black text-white"
+              style={{ backgroundColor: avatarColor }}
+            >
+              Lv.{rank.level} {rank.title}
+            </span>
+          </div>
+          {profile?.bio ? (
+            <p className="mt-1 line-clamp-2 text-xs font-medium text-[color:var(--muted)]">
+              {profile.bio}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
+              完了した場所の数で旅人ランクが上がります。
+            </p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          aria-label="プロフィールを編集"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[color:var(--line)] text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+        >
+          <Pencil size={15} />
+        </button>
       </div>
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        aria-label="プロフィールを編集"
-        className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-[color:var(--line)] text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <Pencil size={15} />
-      </button>
+
+      {/* Account linking for email/password users. */}
+      {!hasGoogle && onLinkGoogle && (
+        <div className="mt-4 border-t border-[color:var(--line)] pt-3">
+          <button
+            type="button"
+            onClick={handleLink}
+            disabled={linkBusy}
+            className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)] disabled:opacity-60"
+          >
+            <Link2 size={14} />
+            {linkBusy ? "連携中…" : "Googleアカウントを連携する"}
+          </button>
+          {linkError && (
+            <p className="mt-2 text-xs font-bold text-vermilion">{linkError}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

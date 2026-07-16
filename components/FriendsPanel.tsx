@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bookmark,
   Check,
   Copy,
+  QrCode,
   RefreshCw,
+  ScanLine,
   Trash2,
   UserPlus,
   Users,
@@ -13,6 +15,7 @@ import {
 } from "lucide-react";
 import type {
   FriendRequest,
+  JourneyResult,
   PublicProfile,
   SharedCard,
   TabibitoProfile,
@@ -29,13 +32,26 @@ import {
   removeFriend,
   sendFriendRequest,
 } from "@/lib/api/social";
-import type { JourneyResult } from "@/types";
+
+// Pull a friend code out of a scanned QR payload — either the invite URL
+// (…/friends?add=CODE) or a bare 6-char code.
+function codeFromPayload(payload: string): string | null {
+  const fromUrl = payload.match(/[?&]add=([A-HJ-NP-Z2-9]{6})/i);
+  if (fromUrl) return fromUrl[1].toUpperCase();
+  const bare = payload.trim().toUpperCase();
+  return /^[A-HJ-NP-Z2-9]{6}$/.test(bare) ? bare : null;
+}
+
+type BarcodeDetectorLike = {
+  detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]>;
+};
 
 export function FriendsPanel({
   uid,
   profile,
   fallbackName,
   visitedCount,
+  autoAddCode,
   onOpenJourney,
   onSaveShared,
 }: {
@@ -43,10 +59,13 @@ export function FriendsPanel({
   profile: TabibitoProfile | null;
   fallbackName: string;
   visitedCount: number;
+  // A friend code arriving via a scanned invite link (?add=CODE).
+  autoAddCode?: string | null;
   onOpenJourney: (journey: JourneyResult) => void;
   onSaveShared: (journey: JourneyResult) => Promise<void>;
 }) {
   const [me, setMe] = useState<PublicProfile | null>(null);
+  const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [friends, setFriends] = useState<PublicProfile[]>([]);
   const [requests, setRequests] = useState<FriendRequest[]>([]);
   const [inbox, setInbox] = useState<SharedCard[]>([]);
@@ -55,6 +74,10 @@ export function FriendsPanel({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [scanOpen, setScanOpen] = useState(false);
+  const [scanSupported, setScanSupported] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const autoAddDone = useRef(false);
 
   const myName = profile?.displayName?.trim() || fallbackName;
 
@@ -68,6 +91,10 @@ export function FriendsPanel({
     setRequests(nextRequests);
     setInbox(nextInbox);
   }, [uid]);
+
+  useEffect(() => {
+    setScanSupported("BarcodeDetector" in window);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -87,36 +114,134 @@ export function FriendsPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uid, profile, visitedCount]);
 
-  async function handleAdd() {
-    const code = codeInput.trim().toUpperCase();
-    if (!code) return;
-    setBusy(true);
-    setFeedback(null);
-    try {
-      if (me && code === me.friendCode) {
-        setFeedback("それはあなた自身のコードです。");
-        return;
+  // Render my invite QR (link form, so any camera app can open it).
+  useEffect(() => {
+    if (!me?.friendCode) return;
+    let active = true;
+    import("qrcode")
+      .then((qr) =>
+        qr.toDataURL(
+          `${window.location.origin}/friends?add=${me.friendCode}`,
+          {
+            width: 480,
+            margin: 1,
+            color: { dark: "#1f2924", light: "#fffdf8" },
+          },
+        ),
+      )
+      .then((url) => {
+        if (active) setQrUrl(url);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [me?.friendCode]);
+
+  const handleAddByCode = useCallback(
+    async (rawCode: string) => {
+      const code = rawCode.trim().toUpperCase();
+      if (!code) return;
+      setBusy(true);
+      setFeedback(null);
+      try {
+        if (me && code === me.friendCode) {
+          setFeedback("それはあなた自身のコードです。");
+          return;
+        }
+        const target = await findByFriendCode(code);
+        if (!target) {
+          setFeedback("このコードの旅人は見つかりませんでした。");
+          return;
+        }
+        if (target.uid === uid) {
+          setFeedback("それはあなた自身のコードです。");
+          return;
+        }
+        if (friends.some((friend) => friend.uid === target.uid)) {
+          setFeedback(`${target.displayName ?? "その旅人"}とはもう友達です。`);
+          return;
+        }
+        await sendFriendRequest(uid, target.uid, myName);
+        setFeedback(
+          `${target.displayName ?? "旅人"}にリクエストを送りました。承認を待ってね。`,
+        );
+        setCodeInput("");
+      } catch {
+        setFeedback("送信できませんでした。少し待ってからもう一度。");
+      } finally {
+        setBusy(false);
       }
-      const target = await findByFriendCode(code);
-      if (!target) {
-        setFeedback("このコードの旅人は見つかりませんでした。");
-        return;
+    },
+    [uid, me, friends, myName],
+  );
+
+  // A scanned invite link landed us here with ?add=CODE — send once.
+  useEffect(() => {
+    if (!autoAddCode || autoAddDone.current) return;
+    autoAddDone.current = true;
+    handleAddByCode(autoAddCode);
+  }, [autoAddCode, handleAddByCode]);
+
+  // In-app QR scanner (Chrome/Android BarcodeDetector).
+  useEffect(() => {
+    if (!scanOpen) return;
+    let stream: MediaStream | null = null;
+    let frame = 0;
+    let active = true;
+    const DetectorCtor = (
+      window as unknown as {
+        BarcodeDetector: new (options: { formats: string[] }) => BarcodeDetectorLike;
       }
-      if (friends.some((friend) => friend.uid === target.uid)) {
-        setFeedback(`${target.displayName ?? "その旅人"}とはもう友達です。`);
-        return;
+    ).BarcodeDetector;
+    const detector = new DetectorCtor({ formats: ["qr_code"] });
+
+    async function tick() {
+      if (!active) return;
+      const video = videoRef.current;
+      if (video && video.readyState >= 2) {
+        try {
+          const codes = await detector.detect(video);
+          const code = codes.length
+            ? codeFromPayload(codes[0].rawValue)
+            : null;
+          if (code) {
+            setScanOpen(false);
+            handleAddByCode(code);
+            return;
+          }
+        } catch {
+          // detection hiccup — keep scanning
+        }
       }
-      await sendFriendRequest(uid, target.uid, myName);
-      setFeedback(
-        `${target.displayName ?? "旅人"}にリクエストを送りました。承認を待ってね。`,
-      );
-      setCodeInput("");
-    } catch {
-      setFeedback("送信できませんでした。少し待ってからもう一度。");
-    } finally {
-      setBusy(false);
+      frame = requestAnimationFrame(tick);
     }
-  }
+
+    navigator.mediaDevices
+      .getUserMedia({ video: { facingMode: "environment" } })
+      .then((nextStream) => {
+        if (!active) {
+          nextStream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+        stream = nextStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = nextStream;
+          videoRef.current.play().catch(() => {});
+        }
+        tick();
+      })
+      .catch(() => {
+        setFeedback("カメラを起動できませんでした。コード入力を使ってね。");
+        setScanOpen(false);
+      });
+
+    return () => {
+      active = false;
+      cancelAnimationFrame(frame);
+      stream?.getTracks().forEach((track) => track.stop());
+    };
+  }, [scanOpen, handleAddByCode]);
 
   async function handleAccept(request: FriendRequest) {
     setBusy(true);
@@ -192,37 +317,86 @@ export function FriendsPanel({
         </button>
       </div>
 
-      {/* My friend code */}
-      <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg bg-[color:var(--surface-muted)] px-4 py-3">
-        <span className="text-xs font-bold text-[color:var(--muted)]">
-          あなたの友達コード
-        </span>
-        <span className="font-mono text-base font-black tracking-[0.2em]">
-          {me?.friendCode ?? "……"}
-        </span>
-        <button
-          type="button"
-          onClick={copyCode}
-          className="inline-flex items-center gap-1 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-2.5 py-1 text-[11px] font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-        >
-          {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? "コピーした！" : "コピー"}
-        </button>
+      {/* My invite QR */}
+      <div className="mt-4 flex flex-col items-center gap-3 rounded-lg bg-[color:var(--surface-muted)] p-4 sm:flex-row sm:items-center">
+        {qrUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={qrUrl}
+            alt={`友達コード ${me?.friendCode ?? ""} のQRコード`}
+            className="h-36 w-36 shrink-0 rounded-lg bg-white p-1.5"
+          />
+        ) : (
+          <div className="grid h-36 w-36 shrink-0 place-items-center rounded-lg bg-white/60">
+            <QrCode size={40} className="text-[color:var(--muted)]" />
+          </div>
+        )}
+        <div className="min-w-0 text-center sm:text-left">
+          <p className="text-xs font-bold text-[color:var(--muted)]">
+            このQRを友達にスキャンしてもらうと、あなたに申請が届きます
+          </p>
+          <p className="mt-2 font-mono text-lg font-black tracking-[0.25em]">
+            {me?.friendCode ?? "……"}
+          </p>
+          <div className="mt-2 flex flex-wrap justify-center gap-2 sm:justify-start">
+            <button
+              type="button"
+              onClick={copyCode}
+              className="inline-flex items-center gap-1 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-[11px] font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+            >
+              {copied ? <Check size={12} /> : <Copy size={12} />}
+              {copied ? "コピーした！" : "コードをコピー"}
+            </button>
+            {scanSupported && (
+              <button
+                type="button"
+                onClick={() => setScanOpen(true)}
+                className="inline-flex items-center gap-1 rounded-full bg-forest px-3 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
+              >
+                <ScanLine size={12} />
+                QRをスキャン
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      {/* Add a friend */}
+      {/* Scanner overlay */}
+      {scanOpen && (
+        <div className="fixed inset-0 z-[2100] flex flex-col items-center justify-center bg-black/80 p-6">
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="w-full max-w-sm rounded-xl"
+          />
+          <p className="mt-3 text-sm font-bold text-white">
+            友達のQRコードを映してね
+          </p>
+          <button
+            type="button"
+            onClick={() => setScanOpen(false)}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-5 py-2 text-sm font-bold text-white backdrop-blur transition hover:bg-white/25"
+          >
+            <X size={15} />
+            閉じる
+          </button>
+        </div>
+      )}
+
+      {/* Manual code entry (fallback when scanning isn't handy) */}
       <div className="mt-3 flex gap-2">
         <input
           type="text"
           value={codeInput}
           onChange={(event) => setCodeInput(event.target.value.toUpperCase())}
-          placeholder="友達コードを入力（例: A2C4EF）"
+          placeholder="コードを直接入力（例: A2C4EF）"
           maxLength={6}
           className="min-w-0 flex-1 rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 font-mono text-sm font-bold uppercase tracking-widest outline-none focus:border-vermilion"
         />
         <button
           type="button"
-          onClick={handleAdd}
+          onClick={() => handleAddByCode(codeInput)}
           disabled={busy || codeInput.trim().length < 6}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-forest px-3.5 py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-50"
         >
@@ -284,7 +458,7 @@ export function FriendsPanel({
         </p>
         {friends.length === 0 ? (
           <p className="mt-2 text-xs font-medium text-[color:var(--muted)]">
-            コードを交換して、旅の仲間を増やそう。
+            QRを見せ合って、旅の仲間を増やそう。
           </p>
         ) : (
           <ul className="mt-2 space-y-2">
