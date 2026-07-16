@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   deleteUserJourney,
   fetchUserJourneys,
+  saveJourneyForUser,
   setJourneyDate,
   setJourneyStatus,
 } from "@/lib/api/savedJourneys";
@@ -44,8 +45,11 @@ import { JapanTileMap } from "@/components/JapanTileMap";
 import { StatusPicker } from "@/components/StatusPicker";
 import { CalendarBoard } from "@/components/CalendarBoard";
 import { ProfileCard } from "@/components/ProfileCard";
+import { FriendsPanel } from "@/components/FriendsPanel";
+import { ShareToFriendButton } from "@/components/ShareToFriendButton";
 import type {
   DestinationCategory,
+  JourneyResult,
   PlaceStatus,
   SavedJourney,
   TabibitoProfile,
@@ -194,6 +198,17 @@ export default function SavedPage() {
     await setJourneyStatus(user.uid, journey.id, status).catch(() => {});
   }
 
+  // A friend's shared card, adopted into my own collection.
+  async function saveSharedJourney(journey: JourneyResult) {
+    if (!user) return;
+    await saveJourneyForUser(user.uid, journey).catch(() => {});
+    setJourneys((current) => {
+      const base = current ?? [];
+      if (base.some((item) => item.id === journey.id)) return current;
+      return [journey, ...base];
+    });
+  }
+
   async function changeDate(journey: SavedJourney, date: string | null) {
     if (!user) return;
     setJourneys((current) =>
@@ -258,13 +273,21 @@ export default function SavedPage() {
 
       {enabled && user && (
         <div className="mt-8">
-          <div className="mb-8">
+          <div className="mb-8 grid gap-4 lg:grid-cols-[1.2fr_.8fr] lg:items-start">
             <ProfileCard
               uid={user.uid}
               profile={profile}
               fallbackName={user.displayName ?? user.email ?? "旅人"}
               visitedCount={visitedCount}
               onSaved={setProfile}
+            />
+            <FriendsPanel
+              uid={user.uid}
+              profile={profile}
+              fallbackName={user.displayName ?? user.email ?? "旅人"}
+              visitedCount={visitedCount}
+              onOpenJourney={(journey) => openJourney(journey)}
+              onSaveShared={saveSharedJourney}
             />
           </div>
 
@@ -482,17 +505,29 @@ export default function SavedPage() {
                       <h2 className="text-base font-black leading-snug">
                         {journey.destination.name}
                       </h2>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          handleDelete(journey.id);
-                        }}
-                        aria-label="削除"
-                        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                      <div
+                        className="flex shrink-0 items-center gap-0.5"
+                        onClick={(event) => event.stopPropagation()}
                       >
-                        <Trash2 size={15} />
-                      </button>
+                        <ShareToFriendButton
+                          uid={user.uid}
+                          myName={
+                            profile?.displayName ??
+                            user.displayName ??
+                            user.email ??
+                            "旅人"
+                          }
+                          journey={journey}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(journey.id)}
+                          aria-label="削除"
+                          className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
                     </div>
 
                     <div

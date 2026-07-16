@@ -118,3 +118,30 @@ export type TabibitoProfile = {
   avatarEmoji?: string;
   avatarColor?: string;
 };
+
+// ---- Social ----
+
+// The public face of a user: what friends (and would-be friends) can see.
+export type PublicProfile = TabibitoProfile & {
+  uid: string;
+  // Short shareable code other travellers use to send a friend request.
+  friendCode: string;
+  visitedCount?: number;
+};
+
+export type FriendRequest = {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  fromName?: string;
+};
+
+// A journey card one traveller sent to another.
+export type SharedCard = {
+  id: string;
+  fromUid: string;
+  toUid: string;
+  fromName?: string;
+  friendshipId: string;
+  journey: JourneyResult;
+};

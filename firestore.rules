@@ -1,0 +1,74 @@
+rules_version = '2';
+
+// Deploy from Firebase Console → Firestore Database → Rules, or with
+// `firebase deploy --only firestore:rules`.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    // ---- Private per-user data: journeys, recent history, tabibito profile.
+    match /users/{uid}/{document=**} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- Public tabibito profiles (name, avatar, friend code, stats).
+    // Readable by any signed-in user so friends can find each other;
+    // only the owner can write.
+    match /profiles/{uid} {
+      allow read: if signedIn();
+      allow create, update, delete: if signedIn() && request.auth.uid == uid;
+    }
+
+    // ---- Friend requests. Document id is "<fromUid>_<toUid>".
+    match /friendRequests/{requestId} {
+      allow read: if signedIn()
+        && (resource.data.fromUid == request.auth.uid
+          || resource.data.toUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && request.resource.data.fromUid != request.resource.data.toUid
+        && requestId
+          == request.resource.data.fromUid + "_" + request.resource.data.toUid;
+      // Either side can withdraw / decline (accepting also deletes it).
+      allow delete: if signedIn()
+        && (resource.data.fromUid == request.auth.uid
+          || resource.data.toUid == request.auth.uid);
+    }
+
+    // ---- Friendships. Document id is "<uidA>_<uidB>" with the two uids
+    // sorted; `members` holds both uids, `requestFrom` is the inviter.
+    // Created by the invited user while the invite still exists.
+    match /friendships/{friendshipId} {
+      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      allow create: if signedIn()
+        && request.auth.uid in request.resource.data.members
+        && request.resource.data.members.size() == 2
+        && request.resource.data.requestFrom in request.resource.data.members
+        && request.resource.data.requestFrom != request.auth.uid
+        && exists(/databases/$(database)/documents/friendRequests/$(request.resource.data.requestFrom + "_" + request.auth.uid));
+      // Either member can unfriend.
+      allow delete: if signedIn() && request.auth.uid in resource.data.members;
+    }
+
+    // ---- Cards shared between friends. `friendshipId` must point at an
+    // existing friendship that contains both sides.
+    match /sharedCards/{cardId} {
+      allow read: if signedIn()
+        && (resource.data.fromUid == request.auth.uid
+          || resource.data.toUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.fromUid == request.auth.uid
+        && exists(/databases/$(database)/documents/friendships/$(request.resource.data.friendshipId))
+        && get(/databases/$(database)/documents/friendships/$(request.resource.data.friendshipId)).data.members.hasAll([
+          request.resource.data.fromUid,
+          request.resource.data.toUid
+        ]);
+      // The recipient can clear their inbox; the sender can retract.
+      allow delete: if signedIn()
+        && (resource.data.fromUid == request.auth.uid
+          || resource.data.toUid == request.auth.uid);
+    }
+  }
+}

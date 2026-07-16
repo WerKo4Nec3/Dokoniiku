@@ -1,7 +1,8 @@
 "use client";
 
+import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { Lock, Mail, User, X } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 
 export const OPEN_AUTH_EVENT = "dokoniiku:open-auth";
@@ -39,6 +40,9 @@ function messageFor(error: unknown): string {
   }
 }
 
+const inputClass =
+  "w-full rounded-xl border border-[color:var(--line)] bg-[color:var(--background)] py-2.5 pl-10 pr-4 text-sm font-medium outline-none transition focus:border-vermilion focus:ring-2 focus:ring-vermilion/20";
+
 export function AuthDialog() {
   const { enabled, user, signInWithGoogle, signInWithEmail, signUpWithEmail } =
     useAuth();
@@ -72,7 +76,7 @@ export function AuthDialog() {
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  if (!enabled || !open) return null;
+  if (!enabled) return null;
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
@@ -105,126 +109,175 @@ export function AuthDialog() {
   }
 
   return (
-    <div
-      className="fixed inset-0 z-[2000] overflow-y-auto"
-      role="dialog"
-      aria-modal="true"
-      aria-label={mode === "login" ? "ログイン" : "新規登録"}
-    >
-      <button
-        type="button"
-        aria-label="閉じる"
-        onClick={() => setOpen(false)}
-        className="fixed inset-0 cursor-default bg-black/50 backdrop-blur-sm"
-      />
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="relative w-full max-w-sm rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float">
-        <button
-          type="button"
-          onClick={() => setOpen(false)}
-          aria-label="閉じる"
-          className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-[color:var(--surface-muted)]"
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-[2000] overflow-y-auto"
+          role="dialog"
+          aria-modal="true"
+          aria-label={mode === "login" ? "ログイン" : "新規登録"}
         >
-          <X size={18} />
-        </button>
-
-        <div className="mb-5 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1 text-xs font-bold">
           <button
             type="button"
-            onClick={() => {
-              setMode("login");
-              setError(null);
-            }}
-            className={`rounded-full px-4 py-1.5 transition ${
-              mode === "login"
-                ? "bg-vermilion text-white"
-                : "text-[color:var(--muted)]"
-            }`}
-          >
-            ログイン
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("register");
-              setError(null);
-            }}
-            className={`rounded-full px-4 py-1.5 transition ${
-              mode === "register"
-                ? "bg-vermilion text-white"
-                : "text-[color:var(--muted)]"
-            }`}
-          >
-            新規登録
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {mode === "register" && (
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="ニックネーム（旅人名）"
-              autoComplete="nickname"
-              className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
-            />
-          )}
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            placeholder="メールアドレス"
-            autoComplete="email"
-            className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
+            aria-label="閉じる"
+            onClick={() => setOpen(false)}
+            className="fixed inset-0 cursor-default bg-black/55 backdrop-blur-sm"
           />
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            placeholder="パスワード（6文字以上）"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            minLength={6}
-            className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
-          />
+          <div className="flex min-h-full items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0, y: 28, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 16, scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 320, damping: 26 }}
+              className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float"
+            >
+              {/* Warm header band with the mascot welcoming the traveller. */}
+              <div className="relative bg-gradient-to-b from-forest/15 via-forest/5 to-transparent px-6 pt-6 text-center dark:from-[#8fd0b9]/10 dark:via-[#8fd0b9]/5">
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  aria-label="閉じる"
+                  className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-[color:var(--surface-muted)]"
+                >
+                  <X size={18} />
+                </button>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/mascot/waving.png"
+                  alt=""
+                  className="mx-auto h-20 w-auto drop-shadow-md"
+                />
+                <h2 className="mt-2 text-lg font-black">
+                  {mode === "login"
+                    ? "おかえりなさい！"
+                    : "はじめまして、旅人さん！"}
+                </h2>
+                <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
+                  {mode === "login"
+                    ? "続きの旅は、ここから。"
+                    : "アカウントを作って、旅の記録を残そう。"}
+                </p>
+              </div>
 
-          {error && (
-            <p className="text-xs font-bold text-vermilion">{error}</p>
-          )}
+              <div className="px-6 pb-6 pt-4">
+                <div className="mx-auto mb-5 grid w-full grid-cols-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1 text-xs font-bold">
+                  {(["login", "register"] as const).map((tab) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => {
+                        setMode(tab);
+                        setError(null);
+                      }}
+                      className={`rounded-full px-4 py-1.5 transition ${
+                        mode === tab
+                          ? "bg-vermilion text-white shadow-sm"
+                          : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                      }`}
+                    >
+                      {tab === "login" ? "ログイン" : "新規登録"}
+                    </button>
+                  ))}
+                </div>
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full rounded-lg bg-vermilion px-4 py-2.5 text-sm font-black text-white transition hover:opacity-90 disabled:opacity-60"
-          >
-            {busy
-              ? "処理中…"
-              : mode === "login"
-                ? "ログイン"
-                : "アカウントを作成"}
-          </button>
-        </form>
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  {mode === "register" && (
+                    <div className="relative">
+                      <User
+                        size={16}
+                        className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
+                      />
+                      <input
+                        type="text"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        placeholder="ニックネーム（旅人名）"
+                        autoComplete="nickname"
+                        className={inputClass}
+                      />
+                    </div>
+                  )}
+                  <div className="relative">
+                    <Mail
+                      size={16}
+                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
+                    />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="メールアドレス"
+                      autoComplete="email"
+                      className={inputClass}
+                    />
+                  </div>
+                  <div className="relative">
+                    <Lock
+                      size={16}
+                      className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
+                    />
+                    <input
+                      type="password"
+                      required
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="パスワード（6文字以上）"
+                      autoComplete={
+                        mode === "login" ? "current-password" : "new-password"
+                      }
+                      minLength={6}
+                      className={inputClass}
+                    />
+                  </div>
 
-        <div className="my-4 flex items-center gap-3 text-[11px] font-bold text-[color:var(--muted)]">
-          <span className="h-px flex-1 bg-[color:var(--line)]" />
-          または
-          <span className="h-px flex-1 bg-[color:var(--line)]" />
-        </div>
+                  {error && (
+                    <motion.p
+                      initial={{ opacity: 0, y: -4 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="rounded-lg bg-vermilion/10 px-3 py-2 text-xs font-bold text-vermilion"
+                    >
+                      {error}
+                    </motion.p>
+                  )}
 
-        <button
-          type="button"
-          onClick={handleGoogle}
-          disabled={busy}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)] disabled:opacity-60"
-        >
-          <GoogleMark />
-          Googleで続ける
-        </button>
-        </div>
-      </div>
-    </div>
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="w-full rounded-xl bg-vermilion px-4 py-3 text-sm font-black text-white shadow-sm shadow-vermilion/30 transition hover:opacity-90 active:scale-[0.99] disabled:opacity-60"
+                  >
+                    {busy
+                      ? "処理中…"
+                      : mode === "login"
+                        ? "ログイン"
+                        : "アカウントを作成"}
+                  </button>
+                </form>
+
+                <div className="my-4 flex items-center gap-3 text-[11px] font-bold text-[color:var(--muted)]">
+                  <span className="h-px flex-1 bg-[color:var(--line)]" />
+                  または
+                  <span className="h-px flex-1 bg-[color:var(--line)]" />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleGoogle}
+                  disabled={busy}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)] disabled:opacity-60"
+                >
+                  <GoogleMark />
+                  Googleで続ける
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 }
 
