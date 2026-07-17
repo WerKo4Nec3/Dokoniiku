@@ -145,3 +145,31 @@ export type SharedCard = {
   friendshipId: string;
   journey: JourneyResult;
 };
+
+// A circle of travellers with a shared chat and joint-trip events.
+export type Group = {
+  id: string;
+  name: string;
+  emoji?: string;
+  ownerUid: string;
+  members: string[];
+};
+
+export type GroupMessage = {
+  id: string;
+  uid: string;
+  name?: string;
+  text: string;
+  // Firestore Timestamp (null while the local write is pending).
+  createdAt?: { toDate: () => Date } | null;
+};
+
+// A planned joint trip: one saved card, one date, whoever joins.
+export type GroupEvent = {
+  id: string;
+  createdBy: string;
+  createdByName?: string;
+  date: string;
+  journey: JourneyResult;
+  participants: string[];
+};

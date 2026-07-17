@@ -6,14 +6,18 @@ import {
   Bookmark,
   CalendarDays,
   CircleUserRound,
+  Settings,
   Users,
+  UsersRound,
 } from "lucide-react";
 
 const tabs = [
   { href: "/saved", label: "保存した旅", icon: Bookmark },
   { href: "/calendar", label: "カレンダー", icon: CalendarDays },
   { href: "/friends", label: "仲間", icon: Users },
+  { href: "/groups", label: "グループ", icon: UsersRound },
   { href: "/profile", label: "プロフィール", icon: CircleUserRound },
+  { href: "/settings", label: "設定", icon: Settings },
 ];
 
 // Tab bar shared by every personal-cabinet page.

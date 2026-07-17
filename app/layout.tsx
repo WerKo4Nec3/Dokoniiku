@@ -30,6 +30,10 @@ const themeScript = `
     const stored = localStorage.getItem('tabi-compass:theme');
     const dark = stored === 'dark' || (!stored && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark', dark);
+    const palette = localStorage.getItem('tabi-compass:palette');
+    if (palette && palette !== 'default') {
+      document.documentElement.dataset.palette = palette;
+    }
   } catch {}
 `;
 

@@ -11,7 +11,31 @@
   --line: #d9d8cf;
   --brand: #e8583e;
   --brand-ink: #8c2d20;
+  /* Accent palette (RGB triplets so Tailwind can apply /opacity). */
+  --c-vermilion: 232 88 62;
+  --c-forest: 40 95 77;
   color-scheme: light;
+}
+
+/* ---- Colour palettes (settings page). Default is the vermilion above. */
+:root[data-palette="ocean"] {
+  --c-vermilion: 47 122 165;
+  --c-forest: 31 95 107;
+}
+
+:root[data-palette="sakura"] {
+  --c-vermilion: 214 87 127;
+  --c-forest: 122 74 94;
+}
+
+:root[data-palette="matcha"] {
+  --c-vermilion: 93 138 60;
+  --c-forest: 47 93 70;
+}
+
+:root[data-palette="yoru"] {
+  --c-vermilion: 124 92 255;
+  --c-forest: 61 74 122;
 }
 
 .dark {

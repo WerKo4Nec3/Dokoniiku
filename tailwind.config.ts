@@ -12,8 +12,10 @@ const config: Config = {
       colors: {
         ink: "#1f2924",
         paper: "#f7f4ed",
-        vermilion: "#e8583e",
-        forest: "#285f4d",
+        // Accent colours come from CSS variables so the settings page can
+        // swap palettes at runtime (see globals.css [data-palette=…]).
+        vermilion: "rgb(var(--c-vermilion) / <alpha-value>)",
+        forest: "rgb(var(--c-forest) / <alpha-value>)",
         sky: "#75b9c8",
         sun: "#f2c14e",
       },

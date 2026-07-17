@@ -8,8 +8,10 @@ import {
   LogIn,
   LogOut,
   Moon,
+  Settings,
   Sun,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -136,12 +138,28 @@ export function AppHeader() {
                       旅の仲間
                     </Link>
                     <Link
+                      href="/groups"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <UsersRound size={16} />
+                      グループ
+                    </Link>
+                    <Link
                       href="/profile"
                       onClick={() => setMenuOpen(false)}
                       className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
                     >
                       <CircleUserRound size={16} />
                       プロフィール
+                    </Link>
+                    <Link
+                      href="/settings"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <Settings size={16} />
+                      設定
                     </Link>
                     <button
                       type="button"
