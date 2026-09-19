@@ -62,6 +62,11 @@ export type WeatherInfo = {
   icon: "sun" | "cloud" | "rain" | "snow";
   advice: string;
   isMock: boolean;
+  // Forecast extras (present when we have a specific day's forecast).
+  high?: number;
+  low?: number;
+  precipitation?: number; // max chance of precipitation, %
+  forDate?: string; // "YYYY-MM-DD" the forecast is for
 };
 
 export type EstimatedBudget = {

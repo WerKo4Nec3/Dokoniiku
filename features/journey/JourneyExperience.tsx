@@ -361,6 +361,15 @@ function WeatherIcon({ weather }: { weather: WeatherInfo }) {
   return <Icon className="text-sky" size={28} aria-hidden="true" />;
 }
 
+// "2026-09-26" → "9/26（土）" for the forecast label.
+const WEEKDAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
+function weatherDateLabel(iso: string) {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return "";
+  const weekday = WEEKDAY_JA[new Date(y, m - 1, d).getDay()];
+  return `${m}/${d}（${weekday}）`;
+}
+
 function TransportIcon({
   mode,
   className,
@@ -2074,7 +2083,9 @@ export function JourneyExperience() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-[color:var(--muted)]">
-                      現地の天気
+                      {journey.weather.forDate
+                        ? `${weatherDateLabel(journey.weather.forDate)}の予報`
+                        : "現地の天気"}
                     </p>
                     <p className="mt-2 text-3xl font-black">
                       {journey.weather.temperature}℃
@@ -2082,6 +2093,24 @@ export function JourneyExperience() {
                     <p className="mt-1 text-sm font-bold">
                       {journey.weather.description}
                     </p>
+                    {(journey.weather.high != null ||
+                      journey.weather.precipitation != null) && (
+                      <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-[color:var(--muted)]">
+                        {journey.weather.high != null &&
+                          journey.weather.low != null && (
+                            <span>
+                              最高 {journey.weather.high}° / 最低{" "}
+                              {journey.weather.low}°
+                            </span>
+                          )}
+                        {journey.weather.precipitation != null && (
+                          <span className="inline-flex items-center gap-1">
+                            <CloudRain size={13} className="text-sky" />
+                            {journey.weather.precipitation}%
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <WeatherIcon weather={journey.weather} />
                 </div>
