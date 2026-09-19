@@ -47,6 +47,7 @@ import {
   saveRecentForUser,
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
+import { readPreferences } from "@/lib/preferences";
 import {
   getDestinationImages,
   getDestinationSummary,
@@ -162,6 +163,44 @@ function pickPlanWithSeasonBoost(pool: Plan[]): Plan {
   );
   if (seasonal.length && Math.random() < 0.5) return randomItem(seasonal);
   return randomItem(pool);
+}
+
+// Soft-bias the pick toward the traveller's favourite genres (~65% of the
+// time when any match), while still keeping the seasonal nudge and room for
+// discovery. Falls back to the season boost when there are no preferences.
+function pickPlanWithBoost(pool: Plan[], preferred: DestinationCategory[]): Plan {
+  if (preferred.length) {
+    const liked = pool.filter((plan) =>
+      plan.destination.categories.some((category) =>
+        preferred.includes(category),
+      ),
+    );
+    if (liked.length && Math.random() < 0.65) {
+      return pickPlanWithSeasonBoost(liked);
+    }
+  }
+  return pickPlanWithSeasonBoost(pool);
+}
+
+// Deal a hand of cards that leans toward favourite genres (~2/3) but keeps a
+// couple of wildcards for discovery. Plain random when there are no favourites.
+function sampleWithPreference(
+  plans: Plan[],
+  count: number,
+  preferred: DestinationCategory[],
+): Plan[] {
+  if (!preferred.length) return sampleItems(plans, count);
+  const liked = plans.filter((plan) =>
+    plan.destination.categories.some((category) =>
+      preferred.includes(category),
+    ),
+  );
+  const likedIds = new Set(liked.map((plan) => plan.destination.id));
+  const rest = plans.filter((plan) => !likedIds.has(plan.destination.id));
+  const wantLiked = Math.min(liked.length, Math.ceil(count * 0.66));
+  const pickedLiked = sampleItems(liked, wantLiked);
+  const pickedRest = sampleItems(rest, count - pickedLiked.length);
+  return sampleItems([...pickedLiked, ...pickedRest], count);
 }
 
 // Shared entrance animation: parents stagger their fadeUp children.
@@ -805,10 +844,11 @@ export function JourneyExperience() {
       if (others.length) pool = others;
     }
 
-    // With no genre chosen, gently favour places that fit the season.
+    // With an explicit genre filter, pick freely within it; otherwise bias
+    // toward the traveller's saved favourites (and the season).
     const picked = selectedCategories.length
       ? randomItem(pool)
-      : pickPlanWithSeasonBoost(pool);
+      : pickPlanWithBoost(pool, readPreferences());
     await finalizePlan(picked, built.providerMock, built.placesNotice);
   }
 
@@ -818,7 +858,9 @@ export function JourneyExperience() {
     const built = await buildPlans();
     if (!built) return;
     setShufflePool(built);
-    setShuffleOptions(sampleItems(built.plans, SHUFFLE_COUNT));
+    setShuffleOptions(
+      sampleWithPreference(built.plans, SHUFFLE_COUNT, readPreferences()),
+    );
     setStage("shuffle");
   }
 

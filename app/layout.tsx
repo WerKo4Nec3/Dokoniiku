@@ -4,6 +4,7 @@ import "./globals.css";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { CabinetChrome } from "@/components/CabinetChrome";
 import { AuthDialog } from "@/components/AuthDialog";
+import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
 
@@ -73,6 +74,7 @@ export default function RootLayout({
           <CabinetChrome />
           <main>{children}</main>
           <AuthDialog />
+          <PreferencesDialog />
         </AuthProvider>
         <ServiceWorkerRegister />
       </body>

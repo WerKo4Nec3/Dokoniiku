@@ -1,8 +1,14 @@
 "use client";
 
-import { Check, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Heart, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CabinetHeader } from "@/components/CabinetHeader";
+import { categoryLabels } from "@/lib/utils/travel";
+import {
+  CATEGORY_EMOJI,
+  openPreferences,
+  usePreferences,
+} from "@/lib/preferences";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -31,6 +37,7 @@ function currentTheme(): ThemeMode {
 export default function SettingsPage() {
   const [theme, setTheme] = useState<ThemeMode>("auto");
   const [palette, setPalette] = useState("default");
+  const preferred = usePreferences();
 
   useEffect(() => {
     setTheme(currentTheme());
@@ -154,6 +161,42 @@ export default function SettingsPage() {
               );
             })}
           </div>
+        </div>
+
+        {/* Favourite genres (biases the "surprise me" pick) */}
+        <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+          <div className="flex items-center gap-2">
+            <Heart size={16} className="text-vermilion" />
+            <h2 className="text-sm font-black">好みのジャンル</h2>
+          </div>
+          <p className="mt-1 text-xs font-medium text-[color:var(--muted)]">
+            選んだジャンルに、タビの行き先えらびが少し寄っていきます。
+          </p>
+          {preferred.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {preferred.map((category) => (
+                <span
+                  key={category}
+                  className="inline-flex items-center gap-1 rounded-full bg-vermilion/10 px-3 py-1.5 text-xs font-bold text-vermilion"
+                >
+                  <span aria-hidden>{CATEGORY_EMOJI[category]}</span>
+                  {categoryLabels[category]}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-3 text-xs font-medium text-[color:var(--muted)]">
+              まだ未設定です（今はすべておまかせ）。
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={openPreferences}
+            className="mt-4 inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-2 text-xs font-bold transition hover:bg-[color:var(--surface-muted)]"
+          >
+            <Heart size={14} />
+            好みを{preferred.length ? "変更" : "設定"}する
+          </button>
         </div>
       </div>
     </section>
