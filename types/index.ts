@@ -194,6 +194,18 @@ export type GroupMessage = {
   createdAt?: { toDate: () => Date } | null;
 };
 
+// A quick "where should we go?" poll inside a group.
+export type GroupPollOption = { id: string; label: string };
+export type GroupPoll = {
+  id: string;
+  question: string;
+  createdBy: string;
+  createdByName?: string;
+  options: GroupPollOption[];
+  // uid → chosen option id (one vote each, changeable).
+  votes: Record<string, string>;
+};
+
 // A planned joint trip: one saved card, one date, whoever joins.
 export type GroupEvent = {
   id: string;

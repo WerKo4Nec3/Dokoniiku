@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  BarChart3,
   CalendarPlus,
   Check,
   Globe,
   Lock,
   LogOut,
   MapPin,
+  Plus,
   Send,
   Trash2,
   UserPlus,
@@ -22,8 +24,10 @@ import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import {
   addGroupMembers,
   createGroupEvent,
+  createGroupPoll,
   deleteGroup,
   deleteGroupEvent,
+  deleteGroupPoll,
   getGroup,
   joinPublicGroup,
   leaveGroup,
@@ -31,6 +35,8 @@ import {
   setEventParticipation,
   subscribeGroupEvents,
   subscribeGroupMessages,
+  subscribeGroupPolls,
+  voteGroupPoll,
 } from "@/lib/api/groups";
 import { getPublicProfile, listFriendProfiles } from "@/lib/api/social";
 import { fetchProfile } from "@/lib/api/profile";
@@ -40,11 +46,12 @@ import type {
   Group,
   GroupEvent,
   GroupMessage,
+  GroupPoll,
   PublicProfile,
   TabibitoProfile,
 } from "@/types";
 
-type Tab = "about" | "events" | "chat";
+type Tab = "about" | "events" | "polls" | "chat";
 
 function timeOf(message: GroupMessage): string {
   try {
@@ -82,6 +89,10 @@ export default function GroupPage({
   const [eventOpen, setEventOpen] = useState(false);
   const [eventJourneyId, setEventJourneyId] = useState<string>("");
   const [eventDate, setEventDate] = useState("");
+  const [polls, setPolls] = useState<GroupPoll[]>([]);
+  const [pollOpen, setPollOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [tab, setTab] = useState<Tab>("about");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -139,14 +150,16 @@ export default function GroupPage({
     };
   }, [group]);
 
-  // Live chat + events — members only (rules block non-members).
+  // Live chat + events + polls — members only (rules block non-members).
   useEffect(() => {
     if (!user || !group || !isMember) return;
     const stopMessages = subscribeGroupMessages(groupId, setMessages);
     const stopEvents = subscribeGroupEvents(groupId, setEvents);
+    const stopPolls = subscribeGroupPolls(groupId, setPolls);
     return () => {
       stopMessages();
       stopEvents();
+      stopPolls();
     };
   }, [user, group, groupId, isMember]);
 
@@ -210,6 +223,22 @@ export default function GroupPage({
     setEventOpen(false);
     setEventJourneyId("");
     setEventDate("");
+  }
+
+  async function handleCreatePoll() {
+    if (!user) return;
+    const options = pollOptions.map((o) => o.trim()).filter(Boolean);
+    if (options.length < 2) return;
+    await createGroupPoll(
+      groupId,
+      user.uid,
+      myName,
+      pollQuestion,
+      options,
+    ).catch(() => {});
+    setPollOpen(false);
+    setPollQuestion("");
+    setPollOptions(["", ""]);
   }
 
   const gated = !enabled || loading || !user;
@@ -331,6 +360,7 @@ export default function GroupPage({
           <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1">
             {tabBtn("about", "紹介")}
             {tabBtn("events", "予定")}
+            {tabBtn("polls", "投票")}
             {tabBtn("chat", "チャット")}
           </div>
 
@@ -560,6 +590,193 @@ export default function GroupPage({
                                 </button>
                               )}
                             </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ))}
+
+            {/* POLLS */}
+            {tab === "polls" &&
+              (!isMember ? (
+                <LockCard label="参加すると、投票に参加できます。" />
+              ) : (
+                <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-black">みんなで投票</h2>
+                    <button
+                      type="button"
+                      onClick={() => setPollOpen((open) => !open)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
+                    >
+                      <BarChart3 size={12} />
+                      投票を作る
+                    </button>
+                  </div>
+
+                  {pollOpen && (
+                    <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
+                      <input
+                        type="text"
+                        value={pollQuestion}
+                        onChange={(e) => setPollQuestion(e.target.value)}
+                        placeholder="質問（例: 週末どこ行く？）"
+                        maxLength={80}
+                        className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-bold outline-none focus:border-vermilion"
+                      />
+                      <div className="mt-2 space-y-2">
+                        {pollOptions.map((opt, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              value={opt}
+                              onChange={(e) =>
+                                setPollOptions((prev) =>
+                                  prev.map((p, idx) =>
+                                    idx === i ? e.target.value : p,
+                                  ),
+                                )
+                              }
+                              placeholder={`選択肢 ${i + 1}`}
+                              maxLength={40}
+                              className="min-w-0 flex-1 rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-medium outline-none focus:border-vermilion"
+                            />
+                            {pollOptions.length > 2 && (
+                              <button
+                                type="button"
+                                aria-label="選択肢を削除"
+                                onClick={() =>
+                                  setPollOptions((prev) =>
+                                    prev.filter((_, idx) => idx !== i),
+                                  )
+                                }
+                                className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                              >
+                                <X size={14} />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        {pollOptions.length < 4 ? (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setPollOptions((prev) => [...prev, ""])
+                            }
+                            className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                          >
+                            <Plus size={12} /> 選択肢を追加
+                          </button>
+                        ) : (
+                          <span />
+                        )}
+                        <button
+                          type="button"
+                          onClick={handleCreatePoll}
+                          disabled={
+                            pollOptions.filter((o) => o.trim()).length < 2
+                          }
+                          className="rounded-full bg-vermilion px-4 py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-50"
+                        >
+                          作成
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {polls.length === 0 ? (
+                    <p className="mt-3 text-xs font-medium text-[color:var(--muted)]">
+                      まだ投票がありません。行き先をみんなで決めよう。
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-4">
+                      {polls.map((poll) => {
+                        const votes = poll.votes ?? {};
+                        const total = Object.keys(votes).length;
+                        const myVote = votes[user.uid];
+                        return (
+                          <li
+                            key={poll.id}
+                            className="rounded-lg border border-[color:var(--line)] p-3"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <p className="text-sm font-black">
+                                {poll.question}
+                              </p>
+                              {(poll.createdBy === user.uid || isOwner) && (
+                                <button
+                                  type="button"
+                                  aria-label="投票を削除"
+                                  onClick={() =>
+                                    deleteGroupPoll(groupId, poll.id).catch(
+                                      () => {},
+                                    )
+                                  }
+                                  className="grid h-6 w-6 shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                            </div>
+                            <div className="mt-2 space-y-1.5">
+                              {poll.options.map((opt) => {
+                                const count = Object.values(votes).filter(
+                                  (v) => v === opt.id,
+                                ).length;
+                                const pct = total
+                                  ? Math.round((count / total) * 100)
+                                  : 0;
+                                const mine = myVote === opt.id;
+                                return (
+                                  <button
+                                    key={opt.id}
+                                    type="button"
+                                    onClick={() =>
+                                      voteGroupPoll(
+                                        groupId,
+                                        poll.id,
+                                        user.uid,
+                                        opt.id,
+                                      ).catch(() => {})
+                                    }
+                                    className={`relative block w-full overflow-hidden rounded-lg border px-3 py-2 text-left transition ${
+                                      mine
+                                        ? "border-vermilion"
+                                        : "border-[color:var(--line)] hover:border-vermilion/40"
+                                    }`}
+                                  >
+                                    <span
+                                      aria-hidden
+                                      className="absolute inset-y-0 left-0 bg-vermilion/10 transition-all"
+                                      style={{ width: `${pct}%` }}
+                                    />
+                                    <span className="relative flex items-center justify-between gap-2">
+                                      <span className="flex min-w-0 items-center gap-1.5 text-sm font-bold">
+                                        {mine && (
+                                          <Check
+                                            size={13}
+                                            className="shrink-0 text-vermilion"
+                                          />
+                                        )}
+                                        <span className="truncate">
+                                          {opt.label}
+                                        </span>
+                                      </span>
+                                      <span className="shrink-0 text-xs font-black tabular-nums text-[color:var(--muted)]">
+                                        {pct}%
+                                      </span>
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                            <p className="mt-2 text-[10px] font-medium text-[color:var(--muted)]">
+                              {total}票 ・ {poll.createdByName ?? "旅人"}が作成
+                            </p>
                           </li>
                         );
                       })}

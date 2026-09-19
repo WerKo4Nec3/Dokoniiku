@@ -107,6 +107,19 @@ service cloud.firestore {
           && (resource.data.createdBy == request.auth.uid
             || get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == request.auth.uid);
       }
+
+      // "Where should we go?" polls. Members read + vote (update); creator or
+      // group owner can delete.
+      match /polls/{pollId} {
+        allow read: if signedIn() && request.auth.uid in groupMembers();
+        allow create: if signedIn()
+          && request.resource.data.createdBy == request.auth.uid
+          && request.auth.uid in groupMembers();
+        allow update: if signedIn() && request.auth.uid in groupMembers();
+        allow delete: if signedIn()
+          && (resource.data.createdBy == request.auth.uid
+            || get(/databases/$(database)/documents/groups/$(groupId)).data.ownerUid == request.auth.uid);
+      }
     }
 
     // ---- Cards shared between friends. `friendshipId` must point at an

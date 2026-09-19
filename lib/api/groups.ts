@@ -25,6 +25,7 @@ import type {
   GroupCover,
   GroupEvent,
   GroupMessage,
+  GroupPoll,
   JourneyResult,
 } from "@/types";
 
@@ -262,4 +263,66 @@ export async function setEventParticipation(
 export async function deleteGroupEvent(groupId: string, eventId: string) {
   if (!db) return;
   await deleteDoc(doc(db, "groups", groupId, "events", eventId));
+}
+
+// ---- Polls ("where should we go?") ----
+
+export function subscribeGroupPolls(
+  groupId: string,
+  onPolls: (polls: GroupPoll[]) => void,
+): () => void {
+  if (!db) return () => {};
+  const ref = query(
+    collection(db, "groups", groupId, "polls"),
+    orderBy("createdAt", "desc"),
+  );
+  return onSnapshot(ref, (snapshot) => {
+    onPolls(
+      snapshot.docs.map((entry) => ({
+        id: entry.id,
+        ...(entry.data() as Omit<GroupPoll, "id">),
+      })),
+    );
+  });
+}
+
+export async function createGroupPoll(
+  groupId: string,
+  createdBy: string,
+  createdByName: string,
+  question: string,
+  optionLabels: string[],
+) {
+  if (!db) return;
+  const options = optionLabels
+    .map((label) => label.trim())
+    .filter(Boolean)
+    .slice(0, 4)
+    .map((label, index) => ({ id: `o${index}`, label }));
+  if (options.length < 2) return;
+  await addDoc(collection(db, "groups", groupId, "polls"), {
+    question: question.trim() || "どこに行く？",
+    createdBy,
+    createdByName,
+    options,
+    votes: {},
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function voteGroupPoll(
+  groupId: string,
+  pollId: string,
+  uid: string,
+  optionId: string,
+) {
+  if (!db) return;
+  await updateDoc(doc(db, "groups", groupId, "polls", pollId), {
+    [`votes.${uid}`]: optionId,
+  });
+}
+
+export async function deleteGroupPoll(groupId: string, pollId: string) {
+  if (!db) return;
+  await deleteDoc(doc(db, "groups", groupId, "polls", pollId));
 }
