@@ -177,7 +177,7 @@ export function JapanGeoMap({
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start">
         {/* LEFT: the map */}
-        <div className="relative">
+        <div className="relative min-w-0">
           <svg
             ref={svgRef}
             role="img"
@@ -315,7 +315,7 @@ export function JapanGeoMap({
         </div>
 
         {/* RIGHT: legend when idle, journey panel when a prefecture is selected */}
-        <div className="lg:sticky lg:top-32">
+        <div className="min-w-0 lg:sticky lg:top-32">
           <AnimatePresence mode="wait">
             {selectedId ? (
               <motion.div

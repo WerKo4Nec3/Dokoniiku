@@ -1896,7 +1896,7 @@ export function JourneyExperience() {
             animate="show"
             className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_.8fr]"
           >
-            <motion.div variants={fadeUp} className="space-y-6">
+            <motion.div variants={fadeUp} className="min-w-0 space-y-6">
               <ImageGallery
                 images={
                   journey.destination.images?.length
@@ -2069,7 +2069,7 @@ export function JourneyExperience() {
               </div>
             </motion.div>
 
-            <motion.div variants={fadeUp} className="space-y-4">
+            <motion.div variants={fadeUp} className="min-w-0 space-y-4">
               <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                 <div className="flex items-center justify-between">
                   <div>
