@@ -1,92 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  ExternalLink,
-  Info,
-  Lightbulb,
-  Play,
-  Sparkles,
-  Youtube,
-} from "lucide-react";
+import { ExternalLink, Lightbulb, Play, Sparkles, Youtube } from "lucide-react";
 import type { DestinationCategory } from "@/types";
 import { getDestinationFacts } from "@/lib/api/wikipedia";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 
-type TabId = "overview" | "facts" | "videos";
 type Video = { id: string; title: string; channel: string; thumb: string };
 
-const TABS: { id: TabId; label: string; Icon: typeof Info }[] = [
-  { id: "overview", label: "概要", Icon: Info },
-  { id: "facts", label: "豆知識", Icon: Lightbulb },
-  { id: "videos", label: "動画", Icon: Youtube },
-];
+const CARD =
+  "rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6";
 
-export function PlaceTabs({
-  name,
-  prefecture,
-  categories,
-  aiEnabled,
-  children,
-}: {
-  name: string;
-  prefecture: string;
-  categories: DestinationCategory[];
-  aiEnabled: boolean;
-  children: React.ReactNode;
-}) {
-  const [tab, setTab] = useState<TabId>("overview");
-
-  return (
-    <div>
-      {/* Tabs as separate blocks */}
-      <div
-        role="tablist"
-        aria-label="場所の詳細"
-        className="grid grid-cols-3 gap-2 sm:gap-3"
-      >
-        {TABS.map(({ id, label, Icon }) => {
-          const active = tab === id;
-          return (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={active}
-              type="button"
-              onClick={() => setTab(id)}
-              className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold transition ${
-                active
-                  ? "border-vermilion bg-vermilion text-white shadow-sm shadow-vermilion/30"
-                  : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
-              }`}
-            >
-              <Icon size={15} />
-              {label}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Active tab content as its own block */}
-      <div className="mt-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
-        {tab === "overview" && children}
-        {tab === "facts" && (
-          <FactsTab
-            name={name}
-            prefecture={prefecture}
-            aiEnabled={aiEnabled}
-            categories={categories}
-          />
-        )}
-        {tab === "videos" && <VideosTab name={name} prefecture={prefecture} />}
-      </div>
-    </div>
-  );
-}
+// ---- 豆知識 (interesting facts) — always-visible card ----
 
 function FactsSkeleton() {
   return (
-    <ul className="space-y-3">
+    <ul className="mt-3 space-y-3">
       {[0, 1, 2].map((i) => (
         <li key={i} className="flex items-start gap-2.5">
           <span className="mt-1 h-4 w-4 shrink-0 rounded-full bg-[color:var(--surface-muted)]" />
@@ -97,7 +26,7 @@ function FactsSkeleton() {
   );
 }
 
-function FactsTab({
+export function FactsCard({
   name,
   prefecture,
   aiEnabled,
@@ -145,20 +74,24 @@ function FactsTab({
     }
   }
 
-  if (facts === null) return <FactsSkeleton />;
+  const empty = facts !== null && facts.length === 0 && !aiFacts;
 
-  const empty = facts.length === 0 && !aiFacts;
   return (
-    <div>
-      {empty ? (
-        <div className="flex items-center gap-3 text-sm font-medium text-[color:var(--muted)]">
+    <div className={CARD}>
+      <h3 className="inline-flex items-center gap-2 text-sm font-black">
+        <Lightbulb size={16} className="text-sun" />
+        豆知識
+      </h3>
+
+      {facts === null ? (
+        <FactsSkeleton />
+      ) : empty ? (
+        <div className="mt-3 flex items-center gap-3 text-sm font-medium text-[color:var(--muted)]">
           <TabiMascot mood="thinking" size="small" />
-          <p>
-            この場所の豆知識はまだ見つからないみたい。概要タブをのぞいてみてね。
-          </p>
+          <p>この場所の豆知識はまだ見つからないみたい。</p>
         </div>
       ) : (
-        <ul className="space-y-3">
+        <ul className="mt-3 space-y-3">
           {facts.map((f, i) => (
             <li
               key={i}
@@ -183,7 +116,7 @@ function FactsTab({
         </ul>
       )}
 
-      {aiEnabled && !aiFacts && (
+      {aiEnabled && !aiFacts && facts !== null && (
         <button
           type="button"
           onClick={askAiFacts}
@@ -194,7 +127,7 @@ function FactsTab({
           {aiLoading ? "タビが調べています…" : "タビにもっと豆知識を聞く"}
         </button>
       )}
-      {(facts.length > 0 || aiFacts) && (
+      {facts !== null && (facts.length > 0 || aiFacts) && (
         <p className="mt-4 text-[10px] text-[color:var(--muted)]">
           出典: Wikipedia（日本語版）
           {aiFacts ? "・一部AI生成のため不正確な場合があります" : ""}
@@ -203,6 +136,8 @@ function FactsTab({
     </div>
   );
 }
+
+// ---- 動画 (YouTube) — always-visible card, videos auto-load ----
 
 function VideoSkeleton() {
   return (
@@ -215,13 +150,18 @@ function VideoSkeleton() {
   );
 }
 
-function VideosTab({ name, prefecture }: { name: string; prefecture: string }) {
+export function VideosCard({
+  name,
+  prefecture,
+}: {
+  name: string;
+  prefecture: string;
+}) {
   const [videos, setVideos] = useState<Video[] | null>(null);
   const q = (extra = "") => `${name} ${prefecture} ${extra}`.trim();
   const searchUrl = (extra = "") =>
     `https://www.youtube.com/results?search_query=${encodeURIComponent(q(extra))}`;
 
-  // Auto-pull relevant videos (keyless server-side, or Data API when keyed).
   useEffect(() => {
     let active = true;
     setVideos(null);
@@ -244,57 +184,63 @@ function VideosTab({ name, prefecture }: { name: string; prefecture: string }) {
   const hasEmbeds = Boolean(videos && videos.length > 0);
 
   return (
-    <div>
-      {videos === null && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <VideoSkeleton />
-          <VideoSkeleton />
-        </div>
-      )}
+    <div className={CARD}>
+      <h3 className="inline-flex items-center gap-2 text-sm font-black">
+        <Youtube size={16} className="text-vermilion" />
+        動画
+      </h3>
 
-      {hasEmbeds && (
-        <div className="grid gap-3 sm:grid-cols-2">
-          {videos!.map((v) => (
-            <LiteYouTube key={v.id} {...v} />
-          ))}
-        </div>
-      )}
+      <div className="mt-4">
+        {videos === null && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <VideoSkeleton />
+            <VideoSkeleton />
+          </div>
+        )}
 
-      {/* Search shortcuts — footer when we have embeds, main content otherwise */}
-      {videos !== null && (
-        <div
-          className={
-            hasEmbeds ? "mt-5 border-t border-[color:var(--line)] pt-4" : ""
-          }
-        >
-          {!hasEmbeds && (
-            <p className="text-sm font-medium text-[color:var(--muted)]">
-              動画を読み込めませんでした。YouTubeで探してみてね。
-            </p>
-          )}
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {["観光", "グルメ", "見どころ", "空撮"].map((k) => (
+        {hasEmbeds && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {videos!.map((v) => (
+              <LiteYouTube key={v.id} {...v} />
+            ))}
+          </div>
+        )}
+
+        {videos !== null && (
+          <div
+            className={
+              hasEmbeds ? "mt-5 border-t border-[color:var(--line)] pt-4" : ""
+            }
+          >
+            {!hasEmbeds && (
+              <p className="text-sm font-medium text-[color:var(--muted)]">
+                動画を読み込めませんでした。YouTubeで探してみてね。
+              </p>
+            )}
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              {["観光", "グルメ", "見どころ", "空撮"].map((k) => (
+                <a
+                  key={k}
+                  href={searchUrl(k)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
+                >
+                  #{k}
+                </a>
+              ))}
               <a
-                key={k}
-                href={searchUrl(k)}
+                href={searchUrl()}
                 target="_blank"
                 rel="noreferrer"
-                className="rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
+                className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
               >
-                #{k}
+                <Youtube size={13} /> YouTubeで検索 <ExternalLink size={11} />
               </a>
-            ))}
-            <a
-              href={searchUrl()}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
-            >
-              <Youtube size={13} /> YouTubeで検索 <ExternalLink size={11} />
-            </a>
+            </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

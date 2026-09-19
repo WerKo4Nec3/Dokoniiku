@@ -111,7 +111,7 @@ import {
 } from "@/components/journey/CategoryArt";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { ImageGallery } from "./ImageGallery";
-import { PlaceTabs } from "./PlaceTabs";
+import { FactsCard, VideosCard } from "./PlaceSections";
 import { JourneySkeleton } from "./JourneySkeleton";
 
 // Leaflet touches `window`, so load the interactive map client-side only.
@@ -1935,13 +1935,7 @@ export function JourneyExperience() {
                 （各画像の著作権は投稿者に帰属します）
               </p>
 
-              <PlaceTabs
-                key={journey.destination.id}
-                name={journey.destination.name}
-                prefecture={journey.prefecture.nameJa}
-                categories={journey.destination.categories}
-                aiEnabled={aiEnabled}
-              >
+              <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
                 <h3 className="text-sm font-black">この場所について</h3>
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
@@ -2013,7 +2007,21 @@ export function JourneyExperience() {
                     )}
                   </div>
                 )}
-              </PlaceTabs>
+              </div>
+
+              <FactsCard
+                key={`facts-${journey.destination.id}`}
+                name={journey.destination.name}
+                prefecture={journey.prefecture.nameJa}
+                categories={journey.destination.categories}
+                aiEnabled={aiEnabled}
+              />
+
+              <VideosCard
+                key={`videos-${journey.destination.id}`}
+                name={journey.destination.name}
+                prefecture={journey.prefecture.nameJa}
+              />
 
               <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
                 <PlaceMap
