@@ -16,8 +16,6 @@ import { TabiMascot } from "@/features/mascot/TabiMascot";
 type TabId = "overview" | "facts" | "videos";
 type Video = { id: string; title: string; channel: string; thumb: string };
 
-const youtubeEnabled = process.env.NEXT_PUBLIC_YOUTUBE_ENABLED === "true";
-
 const TABS: { id: TabId; label: string; Icon: typeof Info }[] = [
   { id: "overview", label: "概要", Icon: Info },
   { id: "facts", label: "豆知識", Icon: Lightbulb },
@@ -40,11 +38,12 @@ export function PlaceTabs({
   const [tab, setTab] = useState<TabId>("overview");
 
   return (
-    <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
+    <div>
+      {/* Tabs as separate blocks */}
       <div
         role="tablist"
         aria-label="場所の詳細"
-        className="inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1"
+        className="grid grid-cols-3 gap-2 sm:gap-3"
       >
         {TABS.map(({ id, label, Icon }) => {
           const active = tab === id;
@@ -55,20 +54,21 @@ export function PlaceTabs({
               aria-selected={active}
               type="button"
               onClick={() => setTab(id)}
-              className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
+              className={`flex items-center justify-center gap-1.5 rounded-2xl border px-3 py-3 text-sm font-bold transition ${
                 active
-                  ? "bg-vermilion text-white shadow-sm shadow-vermilion/30"
-                  : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                  ? "border-vermilion bg-vermilion text-white shadow-sm shadow-vermilion/30"
+                  : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--muted)] hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
               }`}
             >
-              <Icon size={14} />
+              <Icon size={15} />
               {label}
             </button>
           );
         })}
       </div>
 
-      <div className="mt-5">
+      {/* Active tab content as its own block */}
+      <div className="mt-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
         {tab === "overview" && children}
         {tab === "facts" && (
           <FactsTab
@@ -216,16 +216,15 @@ function VideoSkeleton() {
 }
 
 function VideosTab({ name, prefecture }: { name: string; prefecture: string }) {
-  const [videos, setVideos] = useState<Video[] | null>(
-    youtubeEnabled ? null : [],
-  );
+  const [videos, setVideos] = useState<Video[] | null>(null);
   const q = (extra = "") => `${name} ${prefecture} ${extra}`.trim();
   const searchUrl = (extra = "") =>
     `https://www.youtube.com/results?search_query=${encodeURIComponent(q(extra))}`;
 
+  // Auto-pull relevant videos (keyless server-side, or Data API when keyed).
   useEffect(() => {
-    if (!youtubeEnabled) return;
     let active = true;
+    setVideos(null);
     fetch("/api/place-videos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -246,7 +245,7 @@ function VideosTab({ name, prefecture }: { name: string; prefecture: string }) {
 
   return (
     <div>
-      {youtubeEnabled && videos === null && (
+      {videos === null && (
         <div className="grid gap-3 sm:grid-cols-2">
           <VideoSkeleton />
           <VideoSkeleton />
@@ -261,36 +260,41 @@ function VideosTab({ name, prefecture }: { name: string; prefecture: string }) {
         </div>
       )}
 
-      <div
-        className={
-          hasEmbeds ? "mt-5 border-t border-[color:var(--line)] pt-4" : ""
-        }
-      >
-        <p className="text-sm font-medium text-[color:var(--muted)]">
-          {name}の動画をYouTubeで探す
-        </p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {["観光", "グルメ", "見どころ", "空撮"].map((k) => (
+      {/* Search shortcuts — footer when we have embeds, main content otherwise */}
+      {videos !== null && (
+        <div
+          className={
+            hasEmbeds ? "mt-5 border-t border-[color:var(--line)] pt-4" : ""
+          }
+        >
+          {!hasEmbeds && (
+            <p className="text-sm font-medium text-[color:var(--muted)]">
+              動画を読み込めませんでした。YouTubeで探してみてね。
+            </p>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {["観光", "グルメ", "見どころ", "空撮"].map((k) => (
+              <a
+                key={k}
+                href={searchUrl(k)}
+                target="_blank"
+                rel="noreferrer"
+                className="rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
+              >
+                #{k}
+              </a>
+            ))}
             <a
-              key={k}
-              href={searchUrl(k)}
+              href={searchUrl()}
               target="_blank"
               rel="noreferrer"
-              className="rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
+              className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
             >
-              #{k}
+              <Youtube size={13} /> YouTubeで検索 <ExternalLink size={11} />
             </a>
-          ))}
+          </div>
         </div>
-        <a
-          href={searchUrl()}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-4 inline-flex items-center gap-2 rounded-full bg-vermilion px-4 py-2 text-xs font-bold text-white transition hover:opacity-90"
-        >
-          <Youtube size={14} /> YouTubeで検索 <ExternalLink size={12} />
-        </a>
-      </div>
+      )}
     </div>
   );
 }
