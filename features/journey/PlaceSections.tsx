@@ -1,9 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ExternalLink, Lightbulb, Play, Sparkles, Youtube } from "lucide-react";
+import {
+  ExternalLink,
+  Lightbulb,
+  MapPinned,
+  Play,
+  Sparkles,
+  Youtube,
+} from "lucide-react";
 import type { DestinationCategory } from "@/types";
 import { getDestinationFacts } from "@/lib/api/wikipedia";
+import {
+  getNearbyPlaces,
+  type NearbyCategory,
+  type NearbyGroup,
+} from "@/lib/api/nearby";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 
 type Video = { id: string; title: string; channel: string; thumb: string };
@@ -241,6 +253,116 @@ export function VideosCard({
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ---- 周辺スポット (nearby practical spots from OpenStreetMap) ----
+
+const NEARBY_META: Record<
+  NearbyCategory,
+  { emoji: string; label: string; term: string }
+> = {
+  food: { emoji: "🍽️", label: "食事", term: "レストラン" },
+  onsen: { emoji: "♨️", label: "温泉・銭湯", term: "温泉" },
+  convenience: { emoji: "🏪", label: "コンビニ", term: "コンビニ" },
+  station: { emoji: "🚉", label: "駅", term: "駅" },
+  parking: { emoji: "🅿️", label: "駐車場", term: "駐車場" },
+  toilets: { emoji: "🚻", label: "トイレ", term: "トイレ" },
+};
+
+function formatDistance(m: number) {
+  return m < 1000 ? `${m}m` : `${(m / 1000).toFixed(1)}km`;
+}
+
+function NearbySkeleton() {
+  return (
+    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+      {[0, 1, 2, 3].map((i) => (
+        <div
+          key={i}
+          className="h-16 animate-pulse rounded-xl bg-[color:var(--surface-muted)]"
+        />
+      ))}
+    </div>
+  );
+}
+
+export function NearbyCard({
+  latitude,
+  longitude,
+}: {
+  latitude: number;
+  longitude: number;
+}) {
+  const [groups, setGroups] = useState<NearbyGroup[] | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setGroups(null);
+    getNearbyPlaces(latitude, longitude)
+      .then((g) => active && setGroups(g))
+      .catch(() => active && setGroups([]));
+    return () => {
+      active = false;
+    };
+  }, [latitude, longitude]);
+
+  const mapsUrl = (term: string) =>
+    `https://www.google.com/maps/search/${encodeURIComponent(
+      term,
+    )}/@${latitude},${longitude},15z`;
+
+  return (
+    <div className={CARD}>
+      <h3 className="inline-flex items-center gap-2 text-sm font-black">
+        <MapPinned size={16} className="text-forest dark:text-[#8fd0b9]" />
+        周辺スポット
+      </h3>
+
+      {groups === null ? (
+        <NearbySkeleton />
+      ) : groups.length === 0 ? (
+        <p className="mt-3 text-sm font-medium text-[color:var(--muted)]">
+          この場所の周辺情報は見つかりませんでした。
+        </p>
+      ) : (
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {groups.map((group) => {
+            const meta = NEARBY_META[group.category];
+            return (
+              <a
+                key={group.category}
+                href={mapsUrl(meta.term)}
+                target="_blank"
+                rel="noreferrer"
+                className="min-w-0 rounded-xl border border-[color:var(--line)] bg-[color:var(--background)] p-3 transition hover:border-forest/50"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span aria-hidden className="text-base">
+                    {meta.emoji}
+                  </span>
+                  <span className="truncate text-sm font-black">
+                    {meta.label}
+                  </span>
+                  <span className="ml-auto shrink-0 text-xs font-bold text-[color:var(--muted)]">
+                    {group.count}
+                  </span>
+                </div>
+                {group.nearest && (
+                  <p className="mt-1.5 truncate text-[11px] font-medium text-[color:var(--muted)]">
+                    {group.nearest.name}・{formatDistance(group.nearest.distanceM)}
+                  </p>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="mt-4 text-[10px] text-[color:var(--muted)]">
+        データ: OpenStreetMap contributors
+      </p>
     </div>
   );
 }

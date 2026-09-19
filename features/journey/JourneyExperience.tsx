@@ -112,7 +112,7 @@ import {
 } from "@/components/journey/CategoryArt";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { ImageGallery } from "./ImageGallery";
-import { FactsCard, VideosCard } from "./PlaceSections";
+import { FactsCard, NearbyCard, VideosCard } from "./PlaceSections";
 import { JourneySkeleton } from "./JourneySkeleton";
 
 // Leaflet touches `window`, so load the interactive map client-side only.
@@ -2072,6 +2072,12 @@ export function JourneyExperience() {
                 key={`videos-${journey.destination.id}`}
                 name={journey.destination.name}
                 prefecture={journey.prefecture.nameJa}
+              />
+
+              <NearbyCard
+                key={`nearby-${journey.destination.id}`}
+                latitude={journey.destination.latitude}
+                longitude={journey.destination.longitude}
               />
 
               <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
