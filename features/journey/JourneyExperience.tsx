@@ -107,9 +107,9 @@ import {
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
 import {
-  CategoryArt,
-  categoryArtGradient,
-} from "@/components/journey/CategoryArt";
+  CATEGORY_ORDER,
+  CategoryCard,
+} from "@/components/journey/CategoryCard";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { ImageGallery } from "./ImageGallery";
 import { FactsCard, NearbyCard, VideosCard } from "./PlaceSections";
@@ -293,7 +293,6 @@ function ChoiceCard({
   );
 }
 
-const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
 // Fill percent (0..100) for a .range-brand slider's --fill.
 function sliderFill(value: number, min: number, max: number): number {
@@ -1059,43 +1058,15 @@ export function JourneyExperience() {
             )}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-            {allCategories.map((category) => {
-              const active = selectedCategories.includes(category);
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => toggleCategory(category)}
-                  className={`group relative aspect-[5/4] overflow-hidden rounded-2xl bg-gradient-to-br text-left shadow-sm transition duration-200 ${categoryArtGradient[category]} ${
-                    active
-                      ? "ring-2 ring-vermilion ring-offset-2 ring-offset-[color:var(--surface-muted)]"
-                      : "hover:-translate-y-0.5 hover:shadow-float"
-                  }`}
-                >
-                  <CategoryArt category={category} />
-                  <span
-                    className={`pointer-events-none absolute inset-0 transition ${
-                      active ? "bg-transparent" : "bg-black/20 group-hover:bg-black/0"
-                    }`}
-                  />
-                  <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
-                  <span className="absolute inset-x-0 bottom-0 px-3 pb-2.5 text-sm font-black text-white drop-shadow">
-                    {categoryLabels[category]}
-                  </span>
-                  <span
-                    className={`absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full transition ${
-                      active
-                        ? "scale-100 bg-vermilion text-white opacity-100"
-                        : "scale-75 bg-white/85 text-transparent opacity-0"
-                    }`}
-                  >
-                    <Check size={14} strokeWidth={3} />
-                  </span>
-                </button>
-              );
-            })}
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {CATEGORY_ORDER.map((category) => (
+              <CategoryCard
+                key={category}
+                category={category}
+                selected={selectedCategories.includes(category)}
+                onClick={() => toggleCategory(category)}
+              />
+            ))}
           </div>
         </div>
       </ExpandPanel>

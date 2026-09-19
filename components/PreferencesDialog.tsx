@@ -3,11 +3,9 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
-import { categoryLabels } from "@/lib/utils/travel";
 import type { DestinationCategory } from "@/types";
+import { CATEGORY_ORDER, CategoryCard } from "@/components/journey/CategoryCard";
 import {
-  CATEGORY_EMOJI,
-  PREFERENCE_CATEGORIES,
   PREFERENCES_OPEN_EVENT,
   hasOnboarded,
   markOnboarded,
@@ -88,7 +86,7 @@ export function PreferencesDialog() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 16, scale: 0.97 }}
               transition={{ type: "spring", stiffness: 320, damping: 26 }}
-              className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float"
+              className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float"
             >
               <div className="relative bg-gradient-to-b from-vermilion/15 via-vermilion/5 to-transparent px-6 pt-6 text-center">
                 <button
@@ -114,28 +112,15 @@ export function PreferencesDialog() {
               </div>
 
               <div className="px-6 pb-6 pt-4">
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  {PREFERENCE_CATEGORIES.map((category) => {
-                    const active = selected.has(category);
-                    return (
-                      <button
-                        key={category}
-                        type="button"
-                        onClick={() => toggle(category)}
-                        aria-pressed={active}
-                        className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-sm font-bold transition ${
-                          active
-                            ? "border-vermilion bg-vermilion/10 text-vermilion"
-                            : "border-[color:var(--line)] text-[color:var(--foreground)] hover:border-vermilion/40"
-                        }`}
-                      >
-                        <span aria-hidden className="text-lg">
-                          {CATEGORY_EMOJI[category]}
-                        </span>
-                        {categoryLabels[category]}
-                      </button>
-                    );
-                  })}
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  {CATEGORY_ORDER.map((category) => (
+                    <CategoryCard
+                      key={category}
+                      category={category}
+                      selected={selected.has(category)}
+                      onClick={() => toggle(category)}
+                    />
+                  ))}
                 </div>
 
                 <div className="mt-5 flex items-center justify-between gap-3">
