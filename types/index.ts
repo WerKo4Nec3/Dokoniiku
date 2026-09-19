@@ -154,6 +154,16 @@ export type GroupCover =
   | "night"
   | "citrus";
 
+export type GroupCategory =
+  | "onsen"
+  | "hiking"
+  | "gourmet"
+  | "scenery"
+  | "culture"
+  | "drive"
+  | "photo"
+  | "other";
+
 // A circle of travellers with a shared chat and joint-trip events.
 export type Group = {
   id: string;
@@ -166,6 +176,7 @@ export type Group = {
   nameLower?: string; // name.trim().toLowerCase() for prefix search
   about?: string;
   cover?: GroupCover;
+  category?: GroupCategory;
   keywords?: string[];
 };
 

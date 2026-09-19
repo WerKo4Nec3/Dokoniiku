@@ -21,6 +21,7 @@ import {
 import { db } from "@/lib/firebase";
 import type {
   Group,
+  GroupCategory,
   GroupCover,
   GroupEvent,
   GroupMessage,
@@ -49,6 +50,7 @@ export async function createGroup(
     visibility?: "public" | "private";
     about?: string;
     cover?: GroupCover;
+    category?: GroupCategory;
   },
 ): Promise<string | null> {
   if (!db) return null;
@@ -64,9 +66,23 @@ export async function createGroup(
     visibility: opts?.visibility ?? "private",
     about: opts?.about?.trim() ?? "",
     cover: opts?.cover ?? "forest",
+    category: opts?.category ?? "other",
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+// Browse public groups (for the discover directory, filtered by category
+// client-side). Single-field query — no composite index needed.
+export async function browsePublicGroups(): Promise<Group[]> {
+  if (!db) return [];
+  const snapshot = await getDocs(
+    query(collection(db, "groups"), where("visibility", "==", "public"), limit(60)),
+  );
+  return snapshot.docs.map((entry) => ({
+    id: entry.id,
+    ...(entry.data() as Omit<Group, "id">),
+  }));
 }
 
 // Owner edits name/about/cover/visibility (keeps nameLower in sync so that

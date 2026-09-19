@@ -5,17 +5,26 @@ import { Globe, Lock, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import {
+  browsePublicGroups,
   createGroup,
   joinPublicGroup,
   listMyGroups,
-  searchPublicGroups,
 } from "@/lib/api/groups";
 import { listFriendProfiles } from "@/lib/api/social";
 import { GROUP_COVERS } from "@/lib/groupCovers";
+import {
+  GROUP_CATEGORIES,
+  GROUP_CATEGORY_KEYS,
+} from "@/lib/groupCategories";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { GroupCard } from "@/components/GroupCard";
-import type { Group, GroupCover, PublicProfile } from "@/types";
+import type {
+  Group,
+  GroupCategory,
+  GroupCover,
+  PublicProfile,
+} from "@/types";
 
 const GROUP_EMOJI = ["⛺", "🚌", "🗻", "🍜", "📷", "🎒", "🌊", "🏮"];
 const COVER_KEYS = Object.keys(GROUP_COVERS) as GroupCover[];
@@ -31,13 +40,14 @@ export default function GroupsPage() {
   const [cover, setCover] = useState<GroupCover>("forest");
   const [about, setAbout] = useState("");
   const [visibility, setVisibility] = useState<"public" | "private">("private");
+  const [category, setCategory] = useState<GroupCategory>("other");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
 
-  // Discover / search.
+  // Discover: browse public groups, then filter by category + name locally.
+  const [browse, setBrowse] = useState<Group[] | null>(null);
   const [term, setTerm] = useState("");
-  const [results, setResults] = useState<Group[] | null>(null);
-  const [searching, setSearching] = useState(false);
+  const [catFilter, setCatFilter] = useState<GroupCategory | "all">("all");
 
   useEffect(() => {
     if (!user) return;
@@ -54,26 +64,17 @@ export default function GroupsPage() {
         if (active) setFriends(items);
       })
       .catch(() => {});
+    browsePublicGroups()
+      .then((items) => {
+        if (active) setBrowse(items);
+      })
+      .catch(() => {
+        if (active) setBrowse([]);
+      });
     return () => {
       active = false;
     };
   }, [user]);
-
-  useEffect(() => {
-    const q = term.trim();
-    if (!q) {
-      setResults(null);
-      return;
-    }
-    setSearching(true);
-    const t = setTimeout(() => {
-      searchPublicGroups(q)
-        .then((r) => setResults(r))
-        .catch(() => setResults([]))
-        .finally(() => setSearching(false));
-    }, 300);
-    return () => clearTimeout(t);
-  }, [term]);
 
   function togglePick(uid: string) {
     setPicked((current) => {
@@ -92,6 +93,7 @@ export default function GroupsPage() {
         visibility,
         about,
         cover,
+        category,
       });
       if (id) {
         setGroups((current) => [
@@ -102,6 +104,7 @@ export default function GroupsPage() {
             cover,
             about: about.trim(),
             visibility,
+            category,
             ownerUid: user.uid,
             members: [user.uid, ...picked],
           },
@@ -110,6 +113,7 @@ export default function GroupsPage() {
         setCreating(false);
         setName("");
         setAbout("");
+        setCategory("other");
         setPicked(new Set());
       }
     } finally {
@@ -129,6 +133,23 @@ export default function GroupsPage() {
         ? "bg-vermilion text-white"
         : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
     }`;
+
+  const catChip = (active: boolean) =>
+    `inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+      active
+        ? "border-vermilion bg-vermilion/10 text-vermilion"
+        : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+    }`;
+
+  // Public groups the user hasn't joined, filtered by category + name.
+  const discoverList = (browse ?? []).filter((group) => {
+    if (user && group.members.includes(user.uid)) return false;
+    if (catFilter !== "all" && (group.category ?? "other") !== catFilter)
+      return false;
+    const q = term.trim().toLowerCase();
+    if (q && !group.name.toLowerCase().includes(q)) return false;
+    return true;
+  });
 
   return (
     <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
@@ -163,9 +184,13 @@ export default function GroupsPage() {
 
       {enabled && user && (
         <div className="mt-8 space-y-6">
-          {/* Discover */}
-          <div>
-            <div className="relative">
+          {/* Discover public groups by category */}
+          <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+            <p className="text-xs font-black text-[color:var(--muted)]">
+              グループを見つける
+            </p>
+
+            <div className="relative mt-3">
               <Search
                 size={16}
                 className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
@@ -173,41 +198,62 @@ export default function GroupsPage() {
               <input
                 value={term}
                 onChange={(e) => setTerm(e.target.value)}
-                placeholder="公開グループを探す（例: 温泉、登山…）"
-                className="w-full rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] py-2.5 pl-11 pr-4 text-sm font-medium outline-none focus:border-vermilion"
+                placeholder="名前で探す（例: 温泉部）"
+                className="w-full rounded-full border border-[color:var(--line)] bg-[color:var(--background)] py-2.5 pl-11 pr-4 text-sm font-medium outline-none focus:border-vermilion"
               />
             </div>
-            {term.trim() && (
-              <div className="mt-3 space-y-2">
-                {searching && (
-                  <p className="text-xs font-medium text-[color:var(--muted)]">
-                    探しています…
-                  </p>
-                )}
-                {!searching && results?.length === 0 && (
-                  <p className="text-xs font-medium text-[color:var(--muted)]">
-                    見つかりませんでした。
-                  </p>
-                )}
-                {results
-                  ?.filter((g) => !g.members.includes(user.uid))
-                  .map((g) => (
-                    <GroupCard
-                      key={g.id}
-                      group={g}
-                      trailing={
-                        <button
-                          type="button"
-                          onClick={() => handleJoin(g)}
-                          className="rounded-full bg-vermilion px-4 py-1.5 text-xs font-black text-white transition hover:opacity-90"
-                        >
-                          参加
-                        </button>
-                      }
-                    />
-                  ))}
-              </div>
-            )}
+
+            {/* category sections */}
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setCatFilter("all")}
+                className={catChip(catFilter === "all")}
+              >
+                すべて
+              </button>
+              {GROUP_CATEGORY_KEYS.map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setCatFilter(key)}
+                  className={catChip(catFilter === key)}
+                >
+                  <span aria-hidden>{GROUP_CATEGORIES[key].emoji}</span>
+                  {GROUP_CATEGORIES[key].label}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 space-y-2">
+              {browse === null && (
+                <p className="text-xs font-medium text-[color:var(--muted)]">
+                  読み込み中…
+                </p>
+              )}
+              {browse !== null && discoverList.length === 0 && (
+                <p className="text-xs font-medium text-[color:var(--muted)]">
+                  {catFilter === "all"
+                    ? "参加できる公開グループはまだありません。"
+                    : `「${GROUP_CATEGORIES[catFilter].label}」の公開グループはまだありません。`}
+                </p>
+              )}
+              {discoverList.map((g) => (
+                <GroupCard
+                  key={g.id}
+                  group={g}
+                  trailing={
+                    <button
+                      type="button"
+                      onClick={() => handleJoin(g)}
+                      className="rounded-full bg-vermilion px-4 py-1.5 text-xs font-black text-white transition hover:opacity-90"
+                    >
+                      参加
+                    </button>
+                  }
+                />
+              ))}
+            </div>
           </div>
 
           {!creating ? (
@@ -290,6 +336,24 @@ export default function GroupsPage() {
                 rows={2}
                 className="mt-2 w-full resize-none rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
               />
+
+              {/* category */}
+              <p className="mt-3 text-xs font-bold text-[color:var(--muted)]">
+                カテゴリー
+              </p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {GROUP_CATEGORY_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setCategory(key)}
+                    className={catChip(category === key)}
+                  >
+                    <span aria-hidden>{GROUP_CATEGORIES[key].emoji}</span>
+                    {GROUP_CATEGORIES[key].label}
+                  </button>
+                ))}
+              </div>
 
               {/* visibility */}
               <div className="mt-3 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1">

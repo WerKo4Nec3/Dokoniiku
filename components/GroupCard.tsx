@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Globe, Lock, UsersRound } from "lucide-react";
 import type { Group } from "@/types";
 import { coverCss } from "@/lib/groupCovers";
+import { GROUP_CATEGORIES } from "@/lib/groupCategories";
 
 // VK-style group card: a gradient cover rail with the emoji chip, then name +
 // visibility pill + about snippet + member count. `href` makes the whole card a
@@ -53,9 +54,17 @@ export function GroupCard({
             {group.about}
           </p>
         )}
-        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-[color:var(--muted)]">
-          <UsersRound size={12} /> {group.members.length}人
-          {isOwner && " ・ あなたが管理"}
+        <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold text-[color:var(--muted)]">
+          {group.category && (
+            <span className="inline-flex items-center gap-1">
+              <span aria-hidden>{GROUP_CATEGORIES[group.category].emoji}</span>
+              {GROUP_CATEGORIES[group.category].label}
+            </span>
+          )}
+          <span className="inline-flex items-center gap-1">
+            <UsersRound size={12} /> {group.members.length}人
+          </span>
+          {isOwner && <span>あなたが管理</span>}
         </p>
       </div>
       {trailing && (

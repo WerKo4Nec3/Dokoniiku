@@ -15,29 +15,14 @@ const AVATAR_COLORS = [
   "#c2603a",
 ];
 
-// Traveller ("tabibito") rank derived from how many places the user has done.
-function levelFor(visited: number): { title: string; level: number } {
-  const level = Math.floor(visited / 3) + 1;
-  const title =
-    visited >= 30
-      ? "伝説の旅人"
-      : visited >= 15
-        ? "旅の達人"
-        : visited >= 5
-          ? "熟練の旅人"
-          : visited >= 1
-            ? "駆け出し旅人"
-            : "みならい旅人";
-  return { title, level };
-}
-
 export function ProfileCard({
   uid,
   profile,
   authName,
   photoURL,
   hasGoogle,
-  visitedCount,
+  level,
+  levelTitle,
   onSaved,
   onLinkGoogle,
 }: {
@@ -48,7 +33,8 @@ export function ProfileCard({
   authName?: string | null;
   photoURL?: string | null;
   hasGoogle: boolean;
-  visitedCount: number;
+  level: number;
+  levelTitle: string;
   onSaved: (profile: TabibitoProfile) => void;
   onLinkGoogle?: () => Promise<void>;
 }) {
@@ -66,7 +52,6 @@ export function ProfileCard({
   // A chosen emoji wins; otherwise the Google photo; otherwise the chick.
   const avatarEmoji = profile?.avatarEmoji;
   const showPhoto = !avatarEmoji && Boolean(photoURL);
-  const rank = levelFor(visitedCount);
 
   async function handleSave() {
     setBusy(true);
@@ -244,7 +229,7 @@ export function ProfileCard({
               className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-black text-white"
               style={{ backgroundColor: avatarColor }}
             >
-              Lv.{rank.level} {rank.title}
+              Lv.{level} {levelTitle}
             </span>
           </div>
           {profile?.bio ? (

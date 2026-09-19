@@ -6,10 +6,12 @@ import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { ensurePublicProfile } from "@/lib/api/social";
 import { statusOf } from "@/lib/utils/travel";
+import { computeXp, levelForXp } from "@/lib/utils/gamification";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { JapanGeoMap } from "@/components/JapanGeoMap";
 import { ProfileCard } from "@/components/ProfileCard";
+import { ProfileGameStats } from "@/components/ProfileGameStats";
 import type { TabibitoProfile } from "@/types";
 
 export default function ProfilePage() {
@@ -36,13 +38,8 @@ export default function ProfilePage() {
       (journeys ?? []).filter((journey) => statusOf(journey) === "done").length,
     [journeys],
   );
-  const visitedPrefectures = useMemo(
-    () =>
-      new Set(
-        (journeys ?? [])
-          .filter((journey) => statusOf(journey) === "done")
-          .map((journey) => journey.prefecture.id),
-      ).size,
+  const level = useMemo(
+    () => levelForXp(computeXp(journeys ?? [])),
     [journeys],
   );
 
@@ -97,38 +94,13 @@ export default function ProfilePage() {
             authName={user.displayName}
             photoURL={user.photoURL}
             hasGoogle={hasGoogle}
-            visitedCount={visitedCount}
+            level={level.level}
+            levelTitle={level.title}
             onSaved={handleSaved}
             onLinkGoogle={linkGoogleAccount}
           />
 
-          <div className="grid grid-cols-3 gap-3 text-center">
-            <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-4">
-              <p className="text-2xl font-black tabular-nums">
-                {visitedPrefectures}
-                <span className="text-sm font-bold text-[color:var(--muted)]">
-                  /47
-                </span>
-              </p>
-              <p className="mt-1 text-[11px] font-bold text-[color:var(--muted)]">
-                制覇した都道府県
-              </p>
-            </div>
-            <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-4">
-              <p className="text-2xl font-black tabular-nums">{visitedCount}</p>
-              <p className="mt-1 text-[11px] font-bold text-[color:var(--muted)]">
-                完了した場所
-              </p>
-            </div>
-            <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-4">
-              <p className="text-2xl font-black tabular-nums">
-                {journeys?.length ?? 0}
-              </p>
-              <p className="mt-1 text-[11px] font-bold text-[color:var(--muted)]">
-                保存した旅
-              </p>
-            </div>
-          </div>
+          <ProfileGameStats journeys={journeys ?? []} />
 
           <JapanGeoMap journeys={journeys ?? []} onOpenJourney={openJourney} />
         </div>
