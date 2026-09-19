@@ -7,6 +7,7 @@ import { formatYen } from "@/lib/utils/travel";
 import {
   computeAchievements,
   computeStats,
+  computeStreak,
   computeXp,
   levelForXp,
 } from "@/lib/utils/gamification";
@@ -16,13 +17,14 @@ export function ProfileGameStats({
 }: {
   journeys: SavedJourney[];
 }) {
-  const { xp, level, stats, achievements } = useMemo(() => {
+  const { xp, level, stats, achievements, streak } = useMemo(() => {
     const xp = computeXp(journeys);
     return {
       xp,
       level: levelForXp(xp),
       stats: computeStats(journeys),
       achievements: computeAchievements(journeys),
+      streak: computeStreak(journeys, Date.now()),
     };
   }, [journeys]);
 
@@ -76,6 +78,16 @@ export function ProfileGameStats({
               次のレベルまで あと{" "}
               {(level.levelSpan - level.intoLevel).toLocaleString()} XP
             </p>
+            {streak.best > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-2.5 py-1 text-[11px] font-black text-[#8a6a17] dark:text-sun">
+                  🔥 {streak.current}週連続
+                </span>
+                <span className="text-[11px] font-bold text-[color:var(--muted)]">
+                  最高 {streak.best}週
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

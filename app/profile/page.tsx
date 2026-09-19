@@ -4,21 +4,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
-import { ensurePublicProfile } from "@/lib/api/social";
+import { ensurePublicProfile, listFriendProfiles } from "@/lib/api/social";
 import { statusOf } from "@/lib/utils/travel";
 import { computeXp, levelForXp } from "@/lib/utils/gamification";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
+import { FriendLeaderboard } from "@/components/FriendLeaderboard";
 import { JapanGeoMap } from "@/components/JapanGeoMap";
 import { ProfileCard } from "@/components/ProfileCard";
 import { ProfileGameStats } from "@/components/ProfileGameStats";
-import type { TabibitoProfile } from "@/types";
+import type { PublicProfile, TabibitoProfile } from "@/types";
 
 export default function ProfilePage() {
   const { linkGoogleAccount } = useAuth();
   const { enabled, loading, user, journeys } = useUserJourneys();
   const openJourney = useOpenJourney();
   const [profile, setProfile] = useState<TabibitoProfile | null>(null);
+  const [friends, setFriends] = useState<PublicProfile[]>([]);
 
   useEffect(() => {
     if (!user) return;
@@ -26,6 +28,11 @@ export default function ProfilePage() {
     fetchProfile(user.uid)
       .then((data) => {
         if (active && data) setProfile(data);
+      })
+      .catch(() => {});
+    listFriendProfiles(user.uid)
+      .then((items) => {
+        if (active) setFriends(items);
       })
       .catch(() => {});
     return () => {
@@ -101,6 +108,17 @@ export default function ProfilePage() {
           />
 
           <ProfileGameStats journeys={journeys ?? []} />
+
+          <FriendLeaderboard
+            me={{
+              uid: user.uid,
+              name:
+                profile?.displayName ?? user.displayName ?? "あなた",
+              visitedCount,
+              avatarEmoji: profile?.avatarEmoji,
+            }}
+            friends={friends}
+          />
 
           <JapanGeoMap journeys={journeys ?? []} onOpenJourney={openJourney} />
         </div>

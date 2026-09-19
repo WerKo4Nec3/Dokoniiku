@@ -72,6 +72,57 @@ export function levelForXp(xp: number): LevelInfo {
   };
 }
 
+// ---- Streak (consecutive weeks with a completed place) ----
+
+export type StreakInfo = { current: number; best: number };
+
+const WEEK_MS = 7 * 86400000;
+// 1970-01-05 was a Monday, so weeks are Monday-anchored.
+const MONDAY_ANCHOR = 4 * 86400000;
+
+function weekIndexOf(iso: string): number | null {
+  // Bare "YYYY-MM-DD" → local midnight; full ISO strings parse directly.
+  const ms = Date.parse(iso.length <= 10 ? `${iso}T00:00:00` : iso);
+  if (Number.isNaN(ms)) return null;
+  return Math.floor((ms - MONDAY_ANCHOR) / WEEK_MS);
+}
+
+// `current`: weeks in an unbroken run ending at this week (or last week, so an
+// in-progress week doesn't reset it). `best`: the longest such run ever.
+export function computeStreak(
+  journeys: SavedJourney[],
+  nowMs: number,
+): StreakInfo {
+  const weeks = new Set<number>();
+  for (const journey of journeys) {
+    if (statusOf(journey) !== "done") continue;
+    const iso = journey.plannedDate ?? journey.createdAt;
+    const week = iso ? weekIndexOf(iso) : null;
+    if (week != null) weeks.add(week);
+  }
+  if (!weeks.size) return { current: 0, best: 0 };
+
+  const sorted = [...weeks].sort((a, b) => a - b);
+  let best = 1;
+  let run = 1;
+  for (let i = 1; i < sorted.length; i += 1) {
+    run = sorted[i] === sorted[i - 1] + 1 ? run + 1 : 1;
+    if (run > best) best = run;
+  }
+
+  const nowWeek = Math.floor((nowMs - MONDAY_ANCHOR) / WEEK_MS);
+  const latest = sorted[sorted.length - 1];
+  let current = 0;
+  if (latest >= nowWeek - 1) {
+    current = 1;
+    for (let i = sorted.length - 2; i >= 0; i -= 1) {
+      if (sorted[i] === sorted[i + 1] - 1) current += 1;
+      else break;
+    }
+  }
+  return { current, best };
+}
+
 // ---- Stats ----
 
 export type ProfileStats = {
