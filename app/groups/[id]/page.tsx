@@ -7,6 +7,8 @@ import {
   ArrowLeft,
   CalendarPlus,
   Check,
+  Globe,
+  Lock,
   LogOut,
   MapPin,
   Send,
@@ -23,6 +25,7 @@ import {
   deleteGroup,
   deleteGroupEvent,
   getGroup,
+  joinPublicGroup,
   leaveGroup,
   sendGroupMessage,
   setEventParticipation,
@@ -31,6 +34,7 @@ import {
 } from "@/lib/api/groups";
 import { getPublicProfile, listFriendProfiles } from "@/lib/api/social";
 import { fetchProfile } from "@/lib/api/profile";
+import { coverCss } from "@/lib/groupCovers";
 import { openAuthDialog } from "@/components/AuthDialog";
 import type {
   Group,
@@ -39,6 +43,8 @@ import type {
   PublicProfile,
   TabibitoProfile,
 } from "@/types";
+
+type Tab = "about" | "events" | "chat";
 
 function timeOf(message: GroupMessage): string {
   try {
@@ -76,13 +82,15 @@ export default function GroupPage({
   const [eventOpen, setEventOpen] = useState(false);
   const [eventJourneyId, setEventJourneyId] = useState<string>("");
   const [eventDate, setEventDate] = useState("");
+  const [tab, setTab] = useState<Tab>("about");
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const myName =
-    profile?.displayName?.trim() ||
-    user?.displayName ||
-    user?.email ||
-    "旅人";
+    profile?.displayName?.trim() || user?.displayName || user?.email || "旅人";
+
+  const isMember = !!user && !!group && group.members.includes(user.uid);
+  const isPublic = group?.visibility === "public";
+  const isOwner = !!user && group?.ownerUid === user.uid;
 
   // Load the group + my profile + my friends (for inviting).
   useEffect(() => {
@@ -131,21 +139,21 @@ export default function GroupPage({
     };
   }, [group]);
 
-  // Live chat + events.
+  // Live chat + events — members only (rules block non-members).
   useEffect(() => {
-    if (!user || !group) return;
+    if (!user || !group || !isMember) return;
     const stopMessages = subscribeGroupMessages(groupId, setMessages);
     const stopEvents = subscribeGroupEvents(groupId, setEvents);
     return () => {
       stopMessages();
       stopEvents();
     };
-  }, [user, group, groupId]);
+  }, [user, group, groupId, isMember]);
 
   // Keep the chat pinned to the newest message.
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  }, [messages, tab]);
 
   const invitable = useMemo(
     () => friends.filter((friend) => !group?.members.includes(friend.uid)),
@@ -186,6 +194,12 @@ export default function GroupPage({
     router.push("/groups");
   }
 
+  async function handleJoin() {
+    if (!user || !group) return;
+    await joinPublicGroup(groupId, user.uid).catch(() => {});
+    setGroup((g) => (g ? { ...g, members: [...g.members, user.uid] } : g));
+  }
+
   async function handleCreateEvent() {
     if (!user || !eventJourneyId || !eventDate) return;
     const journey = (journeys ?? []).find((item) => item.id === eventJourneyId);
@@ -200,8 +214,23 @@ export default function GroupPage({
 
   const gated = !enabled || loading || !user;
 
+  const tabBtn = (id: Tab, label: string) => (
+    <button
+      key={id}
+      type="button"
+      onClick={() => setTab(id)}
+      className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
+        tab === id
+          ? "bg-vermilion text-white shadow-sm"
+          : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-24 sm:px-6">
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
       <Link
         href="/groups"
         className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
@@ -227,7 +256,7 @@ export default function GroupPage({
 
       {!gated && notFound && (
         <p className="mt-10 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">
-          このグループは見つかりませんでした（削除されたか、メンバーではありません）。
+          このグループは見つかりませんでした（削除されたか、非公開です）。
         </p>
       )}
 
@@ -235,301 +264,394 @@ export default function GroupPage({
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="mt-4 space-y-5"
+          className="mt-4"
         >
-          {/* Header */}
-          <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-            <div className="flex items-center gap-3">
-              <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-forest/10 text-2xl">
+          {/* Cover banner + overlapping avatar */}
+          <div className="relative overflow-hidden rounded-2xl border border-[color:var(--line)]">
+            <div
+              className="h-28 w-full sm:h-36"
+              style={{ background: coverCss(group.cover) }}
+            />
+            <div className="absolute -bottom-8 left-5">
+              <span className="grid h-20 w-20 place-items-center rounded-2xl border-4 border-[color:var(--surface)] bg-[color:var(--surface)] text-4xl shadow-float">
                 {group.emoji ?? "⛺"}
               </span>
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-xl font-black">{group.name}</h1>
-                <p className="text-[11px] font-bold text-[color:var(--muted)]">
-                  {group.members.length}人のメンバー
-                </p>
+            </div>
+          </div>
+
+          <div className="mt-10 flex items-start gap-3 pl-1">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <h1 className="truncate text-2xl font-black">{group.name}</h1>
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                    isPublic
+                      ? "bg-sky/15 text-[#3f8ea0] dark:text-sky"
+                      : "bg-[color:var(--surface-muted)] text-[color:var(--muted)]"
+                  }`}
+                >
+                  {isPublic ? <Globe size={10} /> : <Lock size={10} />}
+                  {isPublic ? "公開" : "非公開"}
+                </span>
               </div>
+              <p className="text-xs font-bold text-[color:var(--muted)]">
+                {group.members.length}人のメンバー
+              </p>
+            </div>
+            {isMember ? (
               <button
                 type="button"
                 onClick={handleLeave}
                 className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[color:var(--line)] px-3 py-1.5 text-[11px] font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-vermilion"
               >
-                {group.ownerUid === user.uid ? (
+                {isOwner ? (
                   <>
-                    <Trash2 size={12} />
-                    グループを削除
+                    <Trash2 size={12} /> 削除
                   </>
                 ) : (
                   <>
-                    <LogOut size={12} />
-                    退出
+                    <LogOut size={12} /> 退出
                   </>
                 )}
               </button>
-            </div>
+            ) : (
+              isPublic && (
+                <button
+                  type="button"
+                  onClick={handleJoin}
+                  className="shrink-0 rounded-full bg-vermilion px-5 py-2 text-sm font-black text-white shadow-sm shadow-vermilion/30 transition hover:opacity-90"
+                >
+                  参加する
+                </button>
+              )
+            )}
+          </div>
 
-            <div className="mt-3 flex flex-wrap items-center gap-1.5">
-              {group.members.map((uid) => {
-                const member = members.get(uid);
-                return (
-                  <span
-                    key={uid}
-                    title={member?.displayName ?? "旅人"}
-                    className="inline-flex items-center gap-1 rounded-full bg-[color:var(--surface-muted)] px-2.5 py-1 text-[11px] font-bold"
-                  >
-                    <span aria-hidden>{member?.avatarEmoji ?? "🐣"}</span>
-                    {member?.displayName ?? "旅人"}
-                    {uid === group.ownerUid && (
-                      <span className="text-[9px] text-[color:var(--muted)]">
-                        管理
+          {/* Section tabs */}
+          <div className="mt-5 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1">
+            {tabBtn("about", "紹介")}
+            {tabBtn("events", "予定")}
+            {tabBtn("chat", "チャット")}
+          </div>
+
+          <div className="mt-4">
+            {/* ABOUT */}
+            {tab === "about" && (
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                  <h2 className="text-sm font-black">このグループについて</h2>
+                  <p className="mt-2 text-sm font-medium leading-7 text-[color:var(--foreground)]">
+                    {group.about?.trim() || (
+                      <span className="text-[color:var(--muted)]">
+                        紹介文はまだありません。
                       </span>
                     )}
-                  </span>
-                );
-              })}
-              <button
-                type="button"
-                onClick={() => setInviteOpen((open) => !open)}
-                className="inline-flex items-center gap-1 rounded-full border border-dashed border-[color:var(--line)] px-2.5 py-1 text-[11px] font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-              >
-                <UserPlus size={11} />
-                誘う
-              </button>
-            </div>
-
-            {inviteOpen && (
-              <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
-                {invitable.length === 0 ? (
-                  <p className="text-xs font-medium text-[color:var(--muted)]">
-                    誘える友達がいません（全員参加済みか、まだ友達がいません）。
                   </p>
-                ) : (
-                  <div className="flex flex-wrap gap-2">
-                    {invitable.map((friend) => (
-                      <button
-                        key={friend.uid}
-                        type="button"
-                        onClick={() => handleInvite(friend)}
-                        className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs font-bold transition hover:border-vermilion/50"
-                      >
-                        <span aria-hidden>{friend.avatarEmoji ?? "🐣"}</span>
-                        {friend.displayName ?? "名もなき旅人"}
-                        <UserPlus size={11} className="text-[color:var(--muted)]" />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Events */}
-          <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="text-sm font-black">みんなの予定</h2>
-              <button
-                type="button"
-                onClick={() => setEventOpen((open) => !open)}
-                className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
-              >
-                <CalendarPlus size={12} />
-                イベントを作る
-              </button>
-            </div>
-
-            {eventOpen && (
-              <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
-                <p className="text-xs font-bold text-[color:var(--muted)]">
-                  保存した旅から選ぶ
-                </p>
-                <select
-                  value={eventJourneyId}
-                  onChange={(event) => setEventJourneyId(event.target.value)}
-                  className="mt-2 w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-medium outline-none focus:border-vermilion"
-                >
-                  <option value="">場所を選ぶ…</option>
-                  {(journeys ?? []).map((journey) => (
-                    <option key={journey.id} value={journey.id}>
-                      {journey.destination.name}（{journey.prefecture.nameJa}）
-                    </option>
-                  ))}
-                </select>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <input
-                    type="date"
-                    value={eventDate}
-                    onChange={(event) => setEventDate(event.target.value)}
-                    className="rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-medium outline-none focus:border-vermilion"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleCreateEvent}
-                    disabled={!eventJourneyId || !eventDate}
-                    className="rounded-full bg-vermilion px-4 py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-50"
-                  >
-                    作成
-                  </button>
+                  {isPublic && (
+                    <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sky/10 px-3 py-1 text-[11px] font-bold text-[#3f8ea0] dark:text-sky">
+                      <Globe size={11} /> 誰でも参加できます
+                    </p>
+                  )}
                 </div>
-                {(journeys ?? []).length === 0 && (
-                  <p className="mt-2 text-xs font-medium text-[color:var(--muted)]">
-                    まだ保存した旅がありません。ホームで見つけて保存してね。
-                  </p>
-                )}
+
+                <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                  <h2 className="text-sm font-black">メンバー</h2>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    {group.members.map((uid) => {
+                      const member = members.get(uid);
+                      return (
+                        <span
+                          key={uid}
+                          title={member?.displayName ?? "旅人"}
+                          className="inline-flex items-center gap-1 rounded-full bg-[color:var(--surface-muted)] px-2.5 py-1 text-[11px] font-bold"
+                        >
+                          <span aria-hidden>{member?.avatarEmoji ?? "🐣"}</span>
+                          {member?.displayName ?? "旅人"}
+                          {uid === group.ownerUid && (
+                            <span className="text-[9px] text-[color:var(--muted)]">
+                              管理
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
+                    {isMember && (
+                      <button
+                        type="button"
+                        onClick={() => setInviteOpen((open) => !open)}
+                        className="inline-flex items-center gap-1 rounded-full border border-dashed border-[color:var(--line)] px-2.5 py-1 text-[11px] font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                      >
+                        <UserPlus size={11} /> 誘う
+                      </button>
+                    )}
+                  </div>
+
+                  {inviteOpen && isMember && (
+                    <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
+                      {invitable.length === 0 ? (
+                        <p className="text-xs font-medium text-[color:var(--muted)]">
+                          誘える友達がいません（全員参加済みか、まだ友達がいません）。
+                        </p>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {invitable.map((friend) => (
+                            <button
+                              key={friend.uid}
+                              type="button"
+                              onClick={() => handleInvite(friend)}
+                              className="inline-flex items-center gap-1.5 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-3 py-1.5 text-xs font-bold transition hover:border-vermilion/50"
+                            >
+                              <span aria-hidden>
+                                {friend.avatarEmoji ?? "🐣"}
+                              </span>
+                              {friend.displayName ?? "名もなき旅人"}
+                              <UserPlus
+                                size={11}
+                                className="text-[color:var(--muted)]"
+                              />
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
-            {events.length === 0 ? (
-              <p className="mt-3 text-xs font-medium text-[color:var(--muted)]">
-                まだ予定がありません。カードと日付でイベントを作ろう。
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {events.map((item) => {
-                  const joined = item.participants.includes(user.uid);
-                  return (
-                    <li
-                      key={item.id}
-                      className="flex items-center gap-3 rounded-lg border border-[color:var(--line)] p-2.5"
+            {/* EVENTS */}
+            {tab === "events" &&
+              (!isMember ? (
+                <LockCard label="参加すると、みんなの予定が見られます。" />
+              ) : (
+                <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-black">みんなの予定</h2>
+                    <button
+                      type="button"
+                      onClick={() => setEventOpen((open) => !open)}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-vermilion px-3.5 py-1.5 text-[11px] font-black text-white transition hover:opacity-90"
                     >
-                      <button
-                        type="button"
-                        onClick={() => openJourney(item.journey)}
-                        aria-label={item.journey.destination.name}
-                        className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-forest/10 bg-cover bg-center"
-                        style={
-                          item.journey.destination.imageUrl
-                            ? {
-                                backgroundImage: `url('${item.journey.destination.imageUrl}')`,
-                              }
-                            : undefined
+                      <CalendarPlus size={12} />
+                      イベントを作る
+                    </button>
+                  </div>
+
+                  {eventOpen && (
+                    <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
+                      <p className="text-xs font-bold text-[color:var(--muted)]">
+                        保存した旅から選ぶ
+                      </p>
+                      <select
+                        value={eventJourneyId}
+                        onChange={(event) =>
+                          setEventJourneyId(event.target.value)
                         }
+                        className="mt-2 w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-medium outline-none focus:border-vermilion"
                       >
-                        {!item.journey.destination.imageUrl && (
-                          <span className="grid h-full w-full place-items-center text-forest/50">
-                            <MapPin size={18} />
-                          </span>
-                        )}
-                      </button>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-black">
-                          {item.journey.destination.name}
-                        </p>
-                        <p className="text-[11px] font-bold text-vermilion">
-                          {item.date.replace(/-/g, "/")}
-                        </p>
-                        <p className="text-[10px] font-medium text-[color:var(--muted)]">
-                          {item.participants.length}人参加 ・{" "}
-                          {item.createdByName ?? "旅人"}が企画
-                        </p>
-                      </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <option value="">場所を選ぶ…</option>
+                        {(journeys ?? []).map((journey) => (
+                          <option key={journey.id} value={journey.id}>
+                            {journey.destination.name}（
+                            {journey.prefecture.nameJa}）
+                          </option>
+                        ))}
+                      </select>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <input
+                          type="date"
+                          value={eventDate}
+                          onChange={(event) => setEventDate(event.target.value)}
+                          className="rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-3 py-2 text-sm font-medium outline-none focus:border-vermilion"
+                        />
                         <button
                           type="button"
-                          onClick={() =>
-                            setEventParticipation(
-                              groupId,
-                              item.id,
-                              user.uid,
-                              !joined,
-                            ).catch(() => {})
-                          }
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-black transition ${
-                            joined
-                              ? "bg-forest/10 text-forest dark:text-[#8fd0b9]"
-                              : "bg-vermilion text-white hover:opacity-90"
-                          }`}
+                          onClick={handleCreateEvent}
+                          disabled={!eventJourneyId || !eventDate}
+                          className="rounded-full bg-vermilion px-4 py-2 text-xs font-black text-white transition hover:opacity-90 disabled:opacity-50"
                         >
-                          {joined ? <Check size={11} /> : null}
-                          {joined ? "参加中" : "参加する"}
+                          作成
                         </button>
-                        {item.createdBy === user.uid && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              deleteGroupEvent(groupId, item.id).catch(() => {})
-                            }
-                            aria-label="イベントを削除"
-                            className="grid h-6 w-6 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
-                          >
-                            <X size={12} />
-                          </button>
-                        )}
                       </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
-
-          {/* Chat */}
-          <div className="flex h-[26rem] flex-col rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
-            <h2 className="border-b border-[color:var(--line)] px-5 py-3 text-sm font-black">
-              チャット
-            </h2>
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
-              {messages.length === 0 && (
-                <p className="text-xs font-medium text-[color:var(--muted)]">
-                  まだメッセージがありません。最初のひとことをどうぞ。
-                </p>
-              )}
-              {messages.map((message) => {
-                const mine = message.uid === user.uid;
-                const member = members.get(message.uid);
-                return (
-                  <div
-                    key={message.id}
-                    className={`flex ${mine ? "justify-end" : "justify-start"}`}
-                  >
-                    <div className={`max-w-[80%] ${mine ? "text-right" : ""}`}>
-                      {!mine && (
-                        <p className="mb-0.5 text-[10px] font-bold text-[color:var(--muted)]">
-                          {member?.avatarEmoji ?? "🐣"}{" "}
-                          {message.name ?? member?.displayName ?? "旅人"}
+                      {(journeys ?? []).length === 0 && (
+                        <p className="mt-2 text-xs font-medium text-[color:var(--muted)]">
+                          まだ保存した旅がありません。ホームで見つけて保存してね。
                         </p>
                       )}
-                      <div
-                        className={`inline-block rounded-2xl px-3.5 py-2 text-sm font-medium leading-6 ${
-                          mine
-                            ? "rounded-br-sm bg-vermilion text-white"
-                            : "rounded-bl-sm bg-[color:var(--surface-muted)]"
-                        }`}
-                      >
-                        {message.text}
-                      </div>
-                      <p className="mt-0.5 text-[9px] font-medium text-[color:var(--muted)]">
-                        {timeOf(message)}
-                      </p>
                     </div>
+                  )}
+
+                  {events.length === 0 ? (
+                    <p className="mt-3 text-xs font-medium text-[color:var(--muted)]">
+                      まだ予定がありません。カードと日付でイベントを作ろう。
+                    </p>
+                  ) : (
+                    <ul className="mt-3 space-y-2">
+                      {events.map((item) => {
+                        const joined = item.participants.includes(user.uid);
+                        return (
+                          <li
+                            key={item.id}
+                            className="flex items-center gap-3 rounded-lg border border-[color:var(--line)] p-2.5"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => openJourney(item.journey)}
+                              aria-label={item.journey.destination.name}
+                              className="h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-forest/10 bg-cover bg-center"
+                              style={
+                                item.journey.destination.imageUrl
+                                  ? {
+                                      backgroundImage: `url('${item.journey.destination.imageUrl}')`,
+                                    }
+                                  : undefined
+                              }
+                            >
+                              {!item.journey.destination.imageUrl && (
+                                <span className="grid h-full w-full place-items-center text-forest/50">
+                                  <MapPin size={18} />
+                                </span>
+                              )}
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-black">
+                                {item.journey.destination.name}
+                              </p>
+                              <p className="text-[11px] font-bold text-vermilion">
+                                {item.date.replace(/-/g, "/")}
+                              </p>
+                              <p className="text-[10px] font-medium text-[color:var(--muted)]">
+                                {item.participants.length}人参加 ・{" "}
+                                {item.createdByName ?? "旅人"}が企画
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEventParticipation(
+                                    groupId,
+                                    item.id,
+                                    user.uid,
+                                    !joined,
+                                  ).catch(() => {})
+                                }
+                                className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-black transition ${
+                                  joined
+                                    ? "bg-forest/10 text-forest dark:text-[#8fd0b9]"
+                                    : "bg-vermilion text-white hover:opacity-90"
+                                }`}
+                              >
+                                {joined ? <Check size={11} /> : null}
+                                {joined ? "参加中" : "参加する"}
+                              </button>
+                              {item.createdBy === user.uid && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    deleteGroupEvent(groupId, item.id).catch(
+                                      () => {},
+                                    )
+                                  }
+                                  aria-label="イベントを削除"
+                                  className="grid h-6 w-6 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-vermilion/10 hover:text-vermilion"
+                                >
+                                  <X size={12} />
+                                </button>
+                              )}
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ))}
+
+            {/* CHAT */}
+            {tab === "chat" &&
+              (!isMember ? (
+                <LockCard label="参加してチャットに参加しよう。" />
+              ) : (
+                <div className="flex h-[26rem] flex-col rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)]">
+                  <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                    {messages.length === 0 && (
+                      <p className="text-xs font-medium text-[color:var(--muted)]">
+                        まだメッセージがありません。最初のひとことをどうぞ。
+                      </p>
+                    )}
+                    {messages.map((message) => {
+                      const mine = message.uid === user.uid;
+                      const member = members.get(message.uid);
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${
+                            mine ? "justify-end" : "justify-start"
+                          }`}
+                        >
+                          <div
+                            className={`max-w-[80%] ${mine ? "text-right" : ""}`}
+                          >
+                            {!mine && (
+                              <p className="mb-0.5 text-[10px] font-bold text-[color:var(--muted)]">
+                                {member?.avatarEmoji ?? "🐣"}{" "}
+                                {message.name ?? member?.displayName ?? "旅人"}
+                              </p>
+                            )}
+                            <div
+                              className={`inline-block rounded-2xl px-3.5 py-2 text-sm font-medium leading-6 ${
+                                mine
+                                  ? "rounded-br-sm bg-vermilion text-white"
+                                  : "rounded-bl-sm bg-[color:var(--surface-muted)]"
+                              }`}
+                            >
+                              {message.text}
+                            </div>
+                            <p className="mt-0.5 text-[9px] font-medium text-[color:var(--muted)]">
+                              {timeOf(message)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    <div ref={chatEndRef} />
                   </div>
-                );
-              })}
-              <div ref={chatEndRef} />
-            </div>
-            <form
-              onSubmit={handleSend}
-              className="flex items-center gap-2 border-t border-[color:var(--line)] p-3"
-            >
-              <input
-                type="text"
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                placeholder="メッセージを書く…"
-                maxLength={500}
-                className="min-w-0 flex-1 rounded-full border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
-              />
-              <button
-                type="submit"
-                disabled={sending || !draft.trim()}
-                aria-label="送信"
-                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-vermilion text-white transition hover:opacity-90 disabled:opacity-50"
-              >
-                <Send size={16} />
-              </button>
-            </form>
+                  <form
+                    onSubmit={handleSend}
+                    className="flex items-center gap-2 border-t border-[color:var(--line)] p-3"
+                  >
+                    <input
+                      type="text"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      placeholder="メッセージを書く…"
+                      maxLength={500}
+                      className="min-w-0 flex-1 rounded-full border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
+                    />
+                    <button
+                      type="submit"
+                      disabled={sending || !draft.trim()}
+                      aria-label="送信"
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-vermilion text-white transition hover:opacity-90 disabled:opacity-50"
+                    >
+                      <Send size={16} />
+                    </button>
+                  </form>
+                </div>
+              ))}
           </div>
         </motion.div>
       )}
     </section>
+  );
+}
+
+function LockCard({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-8 text-center">
+      <Lock size={20} className="text-[color:var(--muted)]" />
+      <p className="text-sm font-bold text-[color:var(--muted)]">{label}</p>
+    </div>
   );
 }

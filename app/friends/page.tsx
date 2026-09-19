@@ -1,15 +1,12 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { saveJourneyForUser } from "@/lib/api/savedJourneys";
 import { statusOf } from "@/lib/utils/travel";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { CabinetNav } from "@/components/CabinetNav";
+import { CabinetHeader } from "@/components/CabinetHeader";
 import { FriendsPanel } from "@/components/FriendsPanel";
 import type { JourneyResult, TabibitoProfile } from "@/types";
 
@@ -60,22 +57,14 @@ export default function FriendsPage() {
   }
 
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-24 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={16} />
-        旅にもどる
-      </Link>
-
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="mt-4 text-3xl font-black sm:text-4xl">旅の仲間</h1>
-        <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-          QRコードで友達とつながって、旅のカードを共有しよう。
-        </p>
-        <CabinetNav />
-      </motion.div>
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
+      <CabinetHeader
+        eyebrow="つながり"
+        title="旅の仲間"
+        subtitle="QRコードで友達とつながって、旅のカードを共有しよう。"
+        mascot="waving"
+        accent="forest"
+      />
 
       {!enabled && (
         <p className="mt-10 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">

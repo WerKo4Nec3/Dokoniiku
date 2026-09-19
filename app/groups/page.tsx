@@ -1,27 +1,43 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft, ChevronRight, Plus, UsersRound, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Globe, Lock, Plus, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { createGroup, listMyGroups } from "@/lib/api/groups";
+import {
+  createGroup,
+  joinPublicGroup,
+  listMyGroups,
+  searchPublicGroups,
+} from "@/lib/api/groups";
 import { listFriendProfiles } from "@/lib/api/social";
+import { GROUP_COVERS } from "@/lib/groupCovers";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { CabinetNav } from "@/components/CabinetNav";
-import type { Group, PublicProfile } from "@/types";
+import { CabinetHeader } from "@/components/CabinetHeader";
+import { GroupCard } from "@/components/GroupCard";
+import type { Group, GroupCover, PublicProfile } from "@/types";
 
 const GROUP_EMOJI = ["⛺", "🚌", "🗻", "🍜", "📷", "🎒", "🌊", "🏮"];
+const COVER_KEYS = Object.keys(GROUP_COVERS) as GroupCover[];
 
 export default function GroupsPage() {
+  const router = useRouter();
   const { enabled, loading, user } = useAuth();
   const [groups, setGroups] = useState<Group[] | null>(null);
   const [friends, setFriends] = useState<PublicProfile[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(GROUP_EMOJI[0]);
+  const [cover, setCover] = useState<GroupCover>("forest");
+  const [about, setAbout] = useState("");
+  const [visibility, setVisibility] = useState<"public" | "private">("private");
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
+
+  // Discover / search.
+  const [term, setTerm] = useState("");
+  const [results, setResults] = useState<Group[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -43,6 +59,22 @@ export default function GroupsPage() {
     };
   }, [user]);
 
+  useEffect(() => {
+    const q = term.trim();
+    if (!q) {
+      setResults(null);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      searchPublicGroups(q)
+        .then((r) => setResults(r))
+        .catch(() => setResults([]))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [term]);
+
   function togglePick(uid: string) {
     setPicked((current) => {
       const next = new Set(current);
@@ -56,13 +88,20 @@ export default function GroupsPage() {
     if (!user || !name.trim()) return;
     setBusy(true);
     try {
-      const id = await createGroup(user.uid, name.trim(), emoji, [...picked]);
+      const id = await createGroup(user.uid, name.trim(), emoji, [...picked], {
+        visibility,
+        about,
+        cover,
+      });
       if (id) {
         setGroups((current) => [
           {
             id,
             name: name.trim(),
             emoji,
+            cover,
+            about: about.trim(),
+            visibility,
             ownerUid: user.uid,
             members: [user.uid, ...picked],
           },
@@ -70,6 +109,7 @@ export default function GroupsPage() {
         ]);
         setCreating(false);
         setName("");
+        setAbout("");
         setPicked(new Set());
       }
     } finally {
@@ -77,23 +117,28 @@ export default function GroupsPage() {
     }
   }
 
-  return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-24 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={16} />
-        旅にもどる
-      </Link>
+  async function handleJoin(group: Group) {
+    if (!user) return;
+    await joinPublicGroup(group.id, user.uid).catch(() => {});
+    router.push(`/groups/${group.id}`);
+  }
 
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="mt-4 text-3xl font-black sm:text-4xl">グループ</h1>
-        <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-          仲間と集まって、チャットしながら次の旅を企てよう。
-        </p>
-        <CabinetNav />
-      </motion.div>
+  const chip = (active: boolean) =>
+    `rounded-full px-4 py-1.5 text-xs font-bold transition ${
+      active
+        ? "bg-vermilion text-white"
+        : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+    }`;
+
+  return (
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
+      <CabinetHeader
+        eyebrow="みんなで"
+        title="グループ"
+        subtitle="仲間と集まって、チャットしながら次の旅を企てよう。"
+        mascot="pointing"
+        accent="vermilion"
+      />
 
       {!enabled && (
         <p className="mt-10 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">
@@ -117,7 +162,54 @@ export default function GroupsPage() {
       )}
 
       {enabled && user && (
-        <div className="mt-8 space-y-4">
+        <div className="mt-8 space-y-6">
+          {/* Discover */}
+          <div>
+            <div className="relative">
+              <Search
+                size={16}
+                className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-[color:var(--muted)]"
+              />
+              <input
+                value={term}
+                onChange={(e) => setTerm(e.target.value)}
+                placeholder="公開グループを探す（例: 温泉、登山…）"
+                className="w-full rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] py-2.5 pl-11 pr-4 text-sm font-medium outline-none focus:border-vermilion"
+              />
+            </div>
+            {term.trim() && (
+              <div className="mt-3 space-y-2">
+                {searching && (
+                  <p className="text-xs font-medium text-[color:var(--muted)]">
+                    探しています…
+                  </p>
+                )}
+                {!searching && results?.length === 0 && (
+                  <p className="text-xs font-medium text-[color:var(--muted)]">
+                    見つかりませんでした。
+                  </p>
+                )}
+                {results
+                  ?.filter((g) => !g.members.includes(user.uid))
+                  .map((g) => (
+                    <GroupCard
+                      key={g.id}
+                      group={g}
+                      trailing={
+                        <button
+                          type="button"
+                          onClick={() => handleJoin(g)}
+                          className="rounded-full bg-vermilion px-4 py-1.5 text-xs font-black text-white transition hover:opacity-90"
+                        >
+                          参加
+                        </button>
+                      }
+                    />
+                  ))}
+              </div>
+            )}
+          </div>
+
           {!creating ? (
             <button
               type="button"
@@ -128,7 +220,7 @@ export default function GroupsPage() {
               グループを作る
             </button>
           ) : (
-            <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+            <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
               <div className="flex items-center justify-between">
                 <h2 className="text-sm font-black">新しいグループ</h2>
                 <button
@@ -139,6 +231,30 @@ export default function GroupsPage() {
                 >
                   <X size={15} />
                 </button>
+              </div>
+
+              {/* cover + emoji preview */}
+              <div
+                className="mt-3 flex h-20 items-center justify-center rounded-xl text-4xl"
+                style={{ background: GROUP_COVERS[cover].css }}
+              >
+                {emoji}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {COVER_KEYS.map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-label={GROUP_COVERS[key].label}
+                    onClick={() => setCover(key)}
+                    style={{ background: GROUP_COVERS[key].css }}
+                    className={`h-8 w-12 rounded-lg transition ${
+                      cover === key
+                        ? "ring-2 ring-vermilion ring-offset-2 ring-offset-[color:var(--surface)]"
+                        : ""
+                    }`}
+                  />
+                ))}
               </div>
 
               <div className="mt-3 flex flex-wrap gap-2">
@@ -166,6 +282,41 @@ export default function GroupsPage() {
                 maxLength={30}
                 className="mt-3 w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
               />
+              <textarea
+                value={about}
+                onChange={(event) => setAbout(event.target.value)}
+                placeholder="どんなグループ？（任意）"
+                maxLength={140}
+                rows={2}
+                className="mt-2 w-full resize-none rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] px-4 py-2.5 text-sm font-medium outline-none focus:border-vermilion"
+              />
+
+              {/* visibility */}
+              <div className="mt-3 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-1">
+                <button
+                  type="button"
+                  onClick={() => setVisibility("private")}
+                  className={`inline-flex items-center gap-1.5 ${chip(
+                    visibility === "private",
+                  )}`}
+                >
+                  <Lock size={12} /> 非公開
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility("public")}
+                  className={`inline-flex items-center gap-1.5 ${chip(
+                    visibility === "public",
+                  )}`}
+                >
+                  <Globe size={12} /> 公開
+                </button>
+              </div>
+              <p className="mt-1.5 text-[11px] font-medium text-[color:var(--muted)]">
+                {visibility === "public"
+                  ? "誰でも検索して参加できます。"
+                  : "招待した人だけが参加できます。"}
+              </p>
 
               <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
                 友達を誘う（あとからも追加できます）
@@ -219,32 +370,21 @@ export default function GroupsPage() {
             </p>
           )}
 
-          {groups !== null &&
-            groups.map((group) => (
-              <Link
-                key={group.id}
-                href={`/groups/${group.id}`}
-                className="flex items-center gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 shadow-float transition hover:border-vermilion/50"
-              >
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-forest/10 text-2xl">
-                  {group.emoji ?? "⛺"}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-black">
-                    {group.name}
-                  </span>
-                  <span className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-bold text-[color:var(--muted)]">
-                    <UsersRound size={12} />
-                    {group.members.length}人
-                    {group.ownerUid === user.uid && " ・ あなたが管理"}
-                  </span>
-                </span>
-                <ChevronRight
-                  size={18}
-                  className="shrink-0 text-[color:var(--muted)]"
+          {groups !== null && groups.length > 0 && (
+            <div className="space-y-3">
+              <p className="text-xs font-black text-[color:var(--muted)]">
+                私のグループ
+              </p>
+              {groups.map((group) => (
+                <GroupCard
+                  key={group.id}
+                  group={group}
+                  isOwner={group.ownerUid === user.uid}
+                  href={`/groups/${group.id}`}
                 />
-              </Link>
-            ))}
+              ))}
+            </div>
+          )}
         </div>
       )}
     </section>

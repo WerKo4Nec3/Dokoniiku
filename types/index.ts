@@ -146,6 +146,14 @@ export type SharedCard = {
   journey: JourneyResult;
 };
 
+export type GroupCover =
+  | "sunset"
+  | "forest"
+  | "ocean"
+  | "sakura"
+  | "night"
+  | "citrus";
+
 // A circle of travellers with a shared chat and joint-trip events.
 export type Group = {
   id: string;
@@ -153,6 +161,12 @@ export type Group = {
   emoji?: string;
   ownerUid: string;
   members: string[];
+  // Discovery/community fields (all optional so old docs keep working).
+  visibility?: "public" | "private"; // absent === private (safe default)
+  nameLower?: string; // name.trim().toLowerCase() for prefix search
+  about?: string;
+  cover?: GroupCover;
+  keywords?: string[];
 };
 
 export type GroupMessage = {

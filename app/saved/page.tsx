@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft,
   ExternalLink,
   MapPin,
   RotateCcw,
@@ -36,7 +35,7 @@ import {
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { CabinetNav } from "@/components/CabinetNav";
+import { CabinetHeader } from "@/components/CabinetHeader";
 import { StatusPicker } from "@/components/StatusPicker";
 import { ShareToFriendButton } from "@/components/ShareToFriendButton";
 import type {
@@ -153,22 +152,14 @@ export default function SavedPage() {
     }`;
 
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-4 pb-20 pt-24 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={16} />
-        旅にもどる
-      </Link>
-
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="mt-4 text-3xl font-black sm:text-4xl">保存した旅</h1>
-        <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-          保存した行き先のコレクション。次の旅のヒントに。
-        </p>
-        <CabinetNav />
-      </motion.div>
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-4 pb-20 pt-32 sm:px-6">
+      <CabinetHeader
+        eyebrow="マイトリップ"
+        title="保存した旅"
+        subtitle="保存した行き先のコレクション。次の旅のヒントに。"
+        mascot="map"
+        accent="vermilion"
+      />
 
       {!enabled && (
         <p className="mt-10 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">

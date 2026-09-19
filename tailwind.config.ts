@@ -9,6 +9,15 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ["var(--font-body)", "Hiragino Sans", "system-ui", "sans-serif"],
+        display: [
+          "var(--font-display)",
+          "Hiragino Maru Gothic ProN",
+          "system-ui",
+          "sans-serif",
+        ],
+      },
       colors: {
         ink: "#1f2924",
         paper: "#f7f4ed",

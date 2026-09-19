@@ -1,9 +1,27 @@
 import type { Metadata, Viewport } from "next";
+import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from "next/font/google";
 import "./globals.css";
 import { AppHeader } from "@/components/layout/AppHeader";
+import { CabinetChrome } from "@/components/CabinetChrome";
 import { AuthDialog } from "@/components/AuthDialog";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 import { AuthProvider } from "@/lib/auth/AuthProvider";
+
+// Rounded, friendly display face for headings + a clean body face. Both cover
+// JP; only the small Latin subset is preloaded (JP glyphs stream on demand).
+const displayFont = Zen_Maru_Gothic({
+  subsets: ["latin"],
+  weight: ["500", "700", "900"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const bodyFont = Zen_Kaku_Gothic_New({
+  subsets: ["latin"],
+  weight: ["400", "500", "700"],
+  variable: "--font-body",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dokoniiku.com"),
@@ -41,13 +59,18 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="ja" suppressHydrationWarning>
+    <html
+      lang="ja"
+      suppressHydrationWarning
+      className={`${displayFont.variable} ${bodyFont.variable}`}
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
         <AuthProvider>
           <AppHeader />
+          <CabinetChrome />
           <main>{children}</main>
           <AuthDialog />
         </AuthProvider>

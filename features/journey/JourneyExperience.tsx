@@ -1,41 +1,39 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   ArrowRight,
   Bike,
   Bookmark,
+  CalendarDays,
   Car,
-  Castle,
   Check,
   ChevronRight,
-  Church,
   Cloud,
   CloudRain,
-  Droplets,
   ExternalLink,
   Footprints,
+  Globe,
   House,
   Info,
-  Landmark,
-  Leaf,
   LocateFixed,
   MapPin,
-  Mountain,
+  Moon,
   RotateCcw,
+  Route,
   Share2,
   Shuffle,
   Snowflake,
   SlidersHorizontal,
   Sparkles,
   Sun,
+  Tent,
   Ticket,
   TrainFront,
   Users,
   Utensils,
   WalletCards,
-  Wand2,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
@@ -54,7 +52,10 @@ import {
   getDestinationSummary,
   getNearbyPhotos,
   looksLikePhoto,
+  mergePhotos,
+  searchCommonsPhotos,
 } from "@/lib/api/wikipedia";
+import { getOpenversePhotos } from "@/lib/api/openverse";
 import {
   getRecentSnapshot,
   parseRecentSnapshot,
@@ -104,8 +105,13 @@ import {
   DifficultyBadge,
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
+import {
+  CategoryArt,
+  categoryArtGradient,
+} from "@/components/journey/CategoryArt";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { ImageGallery } from "./ImageGallery";
+import { PlaceTabs } from "./PlaceTabs";
 import { JourneySkeleton } from "./JourneySkeleton";
 
 // Leaflet touches `window`, so load the interactive map client-side only.
@@ -195,17 +201,103 @@ function ExpandPanel({
   );
 }
 
+// A big tactile choice tile, used for the landing mode + scope pickers.
+function ChoiceCard({
+  active,
+  onClick,
+  visual,
+  title,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  visual: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <motion.button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      whileHover={{ y: -4 }}
+      whileTap={{ scale: 0.97 }}
+      transition={{ type: "spring", stiffness: 320, damping: 22 }}
+      className={`group relative flex flex-col items-center gap-2.5 rounded-2xl border p-4 text-center transition ${
+        active
+          ? "border-vermilion bg-vermilion/5 shadow-float"
+          : "border-[color:var(--line)] bg-[color:var(--surface)] hover:border-vermilion/50 hover:bg-vermilion/[0.03]"
+      }`}
+    >
+      <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[color:var(--surface-muted)] text-vermilion">
+        {visual}
+      </span>
+      <span className="text-sm font-black text-[color:var(--foreground)]">
+        {title}
+      </span>
+      <span className="-mt-1 text-xs font-medium text-[color:var(--muted)]">
+        {subtitle}
+      </span>
+      <AnimatePresence>
+        {active && (
+          <motion.span
+            initial={{ scale: 0, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0, opacity: 0 }}
+            className="absolute right-2.5 top-2.5 grid h-6 w-6 place-items-center rounded-full bg-vermilion text-white shadow-sm"
+          >
+            <Check size={14} />
+          </motion.span>
+        )}
+      </AnimatePresence>
+    </motion.button>
+  );
+}
+
 const allCategories = Object.keys(categoryLabels) as DestinationCategory[];
 
-const categoryIcons: Record<DestinationCategory, LucideIcon> = {
-  nature: Leaf,
-  history: Castle,
-  shrine: Church,
-  museum: Landmark,
-  "hot-spring": Droplets,
-  food: Utensils,
-  viewpoint: Mountain,
+// Fill percent (0..100) for a .range-brand slider's --fill.
+function sliderFill(value: number, min: number, max: number): number {
+  return Math.round(((value - min) / (max - min)) * 100);
+}
+
+const tripLengthIcons: Record<TripLengthId, LucideIcon> = {
+  day: Sun,
+  "one-night": Moon,
+  "two-night": Tent,
 };
+
+// Card wrapper for one trip parameter (budget / distance / transport …).
+function KnobCard({
+  icon: Icon,
+  title,
+  value,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  value?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-4">
+      <div className="flex items-center justify-between gap-3">
+        <span className="inline-flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-vermilion/10 text-vermilion">
+            <Icon size={16} />
+          </span>
+          {title}
+        </span>
+        {value != null && (
+          <span className="rounded-full bg-[color:var(--surface-muted)] px-2.5 py-1 text-xs font-black tabular-nums text-[color:var(--foreground)]">
+            {value}
+          </span>
+        )}
+      </div>
+      <div className="mt-3">{children}</div>
+    </div>
+  );
+}
 
 // Trip length → how long one-way travel may take (round trip is double).
 const tripLengthOptions: {
@@ -283,6 +375,7 @@ function TransportIcon({
 }
 
 export function JourneyExperience() {
+  const reduceMotion = useReducedMotion();
   const [stage, setStage] = useState<Stage>("landing");
   const [direction, setDirection] = useState<Direction | null>(null);
   const [prefecture, setPrefecture] = useState<Prefecture | null>(null);
@@ -610,23 +703,27 @@ export function JourneyExperience() {
     const transport = plan.transport;
     const transfer = journeyMode === "custom" ? allowTransfer : false;
 
-    const [weather, summary, gallery] = await Promise.all([
+    const [weather, summary, gallery, commons, openverse] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
       getDestinationSummary(picked.name),
       getDestinationImages(picked.name),
+      searchCommonsPhotos(`${picked.name} ${prefecture.nameJa}`),
+      getOpenversePhotos(`${picked.name} ${prefecture.nameJa}`),
     ]);
-    // Lead with the article's hero image — unless it's a location/relief map
-    // (common on small-place articles) — then fill in the Commons gallery.
+    // Lead with the article's hero image (unless it's a location/relief map,
+    // common on small-place articles), then merge Wikimedia + Openverse photos.
     const candidateHero = summary?.imageUrl ?? picked.imageUrl;
-    let images = [
-      ...(candidateHero && looksLikePhoto(candidateHero)
-        ? [candidateHero]
-        : []),
-      ...gallery.filter((url) => url !== candidateHero),
-    ];
+    let images = mergePhotos(
+      [
+        candidateHero && looksLikePhoto(candidateHero) ? [candidateHero] : [],
+        gallery,
+        commons,
+        openverse,
+      ],
+      12,
+    );
     if (!images.length) {
-      // No usable photo on the article at all: fall back to photos taken
-      // near the place's coordinates.
+      // No usable photo anywhere: fall back to photos near the coordinates.
       images = await getNearbyPhotos(picked.latitude, picked.longitude);
     }
     const heroImage = images[0];
@@ -883,7 +980,7 @@ export function JourneyExperience() {
         ジャンルで絞る（任意）
         {filtersActive && (
           <span className="rounded-full bg-vermilion px-1.5 py-0.5 text-[10px] font-black text-white">
-            設定中
+            {selectedCategories.length}件
           </span>
         )}
       </button>
@@ -910,9 +1007,9 @@ export function JourneyExperience() {
               </button>
             )}
           </div>
-          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+
+          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {allCategories.map((category) => {
-              const Icon = categoryIcons[category];
               const active = selectedCategories.includes(category);
               return (
                 <button
@@ -920,22 +1017,31 @@ export function JourneyExperience() {
                   type="button"
                   aria-pressed={active}
                   onClick={() => toggleCategory(category)}
-                  className={`group relative flex items-center gap-2 rounded-xl border px-3 py-2.5 text-sm font-bold transition ${
+                  className={`group relative aspect-[5/4] overflow-hidden rounded-2xl bg-gradient-to-br text-left shadow-sm transition duration-200 ${categoryArtGradient[category]} ${
                     active
-                      ? "border-vermilion bg-vermilion text-white shadow-sm shadow-vermilion/30"
-                      : "border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground)] hover:border-vermilion/50 hover:bg-vermilion/5"
+                      ? "ring-2 ring-vermilion ring-offset-2 ring-offset-[color:var(--surface-muted)]"
+                      : "hover:-translate-y-0.5 hover:shadow-float"
                   }`}
                 >
-                  <Icon
-                    size={17}
-                    className={`shrink-0 transition ${
-                      active ? "text-white" : "text-vermilion"
+                  <CategoryArt category={category} />
+                  <span
+                    className={`pointer-events-none absolute inset-0 transition ${
+                      active ? "bg-transparent" : "bg-black/20 group-hover:bg-black/0"
                     }`}
                   />
-                  <span className="truncate">{categoryLabels[category]}</span>
-                  {active && (
-                    <Check size={15} className="ml-auto shrink-0 text-white" />
-                  )}
+                  <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/45 to-transparent" />
+                  <span className="absolute inset-x-0 bottom-0 px-3 pb-2.5 text-sm font-black text-white drop-shadow">
+                    {categoryLabels[category]}
+                  </span>
+                  <span
+                    className={`absolute right-2 top-2 grid h-6 w-6 place-items-center rounded-full transition ${
+                      active
+                        ? "scale-100 bg-vermilion text-white opacity-100"
+                        : "scale-75 bg-white/85 text-transparent opacity-0"
+                    }`}
+                  >
+                    <Check size={14} strokeWidth={3} />
+                  </span>
                 </button>
               );
             })}
@@ -948,98 +1054,141 @@ export function JourneyExperience() {
   // Budget / time / distance / transport knobs. Shared between the landing
   // custom mode and the "loosen your settings" panel on the prefecture stage.
   const customKnobs = (
-    <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 text-left">
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-bold text-[color:var(--muted)]">
-          予算（{people}名・上限）
-        </span>
-        <span className="text-xs font-black">{formatYen(budget)}</span>
-      </div>
-      <input
-        type="range"
-        min={BUDGET_MIN}
-        max={budgetMax}
-        step={1000}
-        value={budget}
-        onChange={(event) => setBudget(Number(event.target.value))}
-        className="mt-2 w-full accent-vermilion"
-      />
+    <div className="space-y-3 text-left">
+      <KnobCard
+        icon={WalletCards}
+        title={`予算（${people}名・上限）`}
+        value={formatYen(budget)}
+      >
+        <input
+          type="range"
+          min={BUDGET_MIN}
+          max={budgetMax}
+          step={1000}
+          value={budget}
+          onChange={(event) => setBudget(Number(event.target.value))}
+          className="range-brand"
+          style={
+            {
+              "--fill": `${sliderFill(budget, BUDGET_MIN, budgetMax)}%`,
+            } as React.CSSProperties
+          }
+        />
+        <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+          <span>{formatYen(BUDGET_MIN)}</span>
+          <span>{formatYen(budgetMax)}</span>
+        </div>
+      </KnobCard>
 
-      <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
-        旅の日数（移動できる時間）
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {tripLengthOptions.map((option) => (
+      <KnobCard icon={CalendarDays} title="旅の日数">
+        <div className="grid grid-cols-3 gap-2">
+          {tripLengthOptions.map((option) => {
+            const Icon = tripLengthIcons[option.id];
+            const active = tripLength === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTripLength(option.id)}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-bold transition ${
+                  active
+                    ? "border-vermilion bg-vermilion/10 text-vermilion"
+                    : "border-[color:var(--line)] bg-[color:var(--surface-muted)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                }`}
+              >
+                <Icon size={18} />
+                {option.labelJa}
+                <span className="text-[10px] font-medium opacity-70">
+                  片道〜{Math.round(option.maxOneWayMinutes / 60)}h
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </KnobCard>
+
+      <KnobCard
+        icon={Route}
+        title="出発地からの距離（上限）"
+        value={`約${maxDistance}km`}
+      >
+        <input
+          type="range"
+          min={5}
+          max={DISTANCE_MAX}
+          step={5}
+          value={maxDistance}
+          onChange={(event) => setMaxDistance(Number(event.target.value))}
+          className="range-brand"
+          style={
+            {
+              "--fill": `${sliderFill(maxDistance, 5, DISTANCE_MAX)}%`,
+            } as React.CSSProperties
+          }
+        />
+        <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+          <span>5km</span>
+          <span>{DISTANCE_MAX}km</span>
+        </div>
+      </KnobCard>
+
+      <KnobCard icon={TrainFront} title="移動手段（複数選択可）">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
+          {allTransportModes.map((mode) => {
+            const Icon = transportIcons[mode];
+            const active = transports.includes(mode);
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={active}
+                onClick={() => toggleTransport(mode)}
+                className={`flex flex-col items-center gap-1.5 rounded-xl border px-1 py-2.5 text-[11px] font-bold transition ${
+                  active
+                    ? "border-vermilion bg-vermilion/10 text-vermilion"
+                    : "border-[color:var(--line)] bg-[color:var(--surface-muted)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                }`}
+              >
+                <span
+                  className={`grid h-9 w-9 place-items-center rounded-full transition ${
+                    active
+                      ? "bg-vermilion text-white"
+                      : "bg-[color:var(--surface)] text-[color:var(--foreground)]"
+                  }`}
+                >
+                  <Icon size={17} />
+                </span>
+                {transportInfo[mode].labelJa}
+              </button>
+            );
+          })}
+        </div>
+      </KnobCard>
+
+      <KnobCard icon={Ticket} title="乗り継ぎ（タクシー等）">
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-xs font-medium text-[color:var(--muted)]">
+            鉄道の旅にラストワンマイルのタクシーを許可します
+          </span>
           <button
-            key={option.id}
             type="button"
-            onClick={() => setTripLength(option.id)}
-            className={chipClass(tripLength === option.id)}
-          >
-            {option.labelJa}
-          </button>
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <span className="text-xs font-bold text-[color:var(--muted)]">
-          出発地からの距離（上限）
-        </span>
-        <span className="text-xs font-black">約{maxDistance}km</span>
-      </div>
-      <input
-        type="range"
-        min={5}
-        max={DISTANCE_MAX}
-        step={5}
-        value={maxDistance}
-        onChange={(event) => setMaxDistance(Number(event.target.value))}
-        className="mt-2 w-full accent-vermilion"
-      />
-
-      <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
-        移動手段（複数選択可）
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {allTransportModes.map((mode) => {
-          const Icon = transportIcons[mode];
-          return (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => toggleTransport(mode)}
-              className={`inline-flex items-center gap-1.5 ${chipClass(
-                transports.includes(mode),
-              )}`}
-            >
-              <Icon size={13} />
-              {transportInfo[mode].labelJa}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3">
-        <span className="text-xs font-bold text-[color:var(--muted)]">
-          乗り継ぎ（最後にタクシー等）を許可
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={allowTransfer}
-          aria-label="乗り継ぎを許可"
-          onClick={() => setAllowTransfer((value) => !value)}
-          className={`relative h-5 w-9 shrink-0 rounded-full transition ${
-            allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
-          }`}
-        >
-          <span
-            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-              allowTransfer ? "left-[18px]" : "left-0.5"
+            role="switch"
+            aria-checked={allowTransfer}
+            aria-label="乗り継ぎを許可"
+            onClick={() => setAllowTransfer((value) => !value)}
+            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+              allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
             }`}
-          />
-        </button>
-      </div>
+          >
+            <span
+              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                allowTransfer ? "left-[22px]" : "left-0.5"
+              }`}
+            />
+          </button>
+        </div>
+      </KnobCard>
     </div>
   );
 
@@ -1059,7 +1208,11 @@ export function JourneyExperience() {
             animate="show"
             className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 text-center sm:px-6 md:py-20"
           >
-            <motion.div variants={fadeUp} className="mb-2 flex justify-center">
+            <motion.div
+              variants={fadeUp}
+              className="relative mb-2 flex justify-center"
+            >
+              <span className="pointer-events-none absolute inset-0 -z-10 mx-auto h-40 w-40 rounded-full bg-sun/20 blur-3xl" />
               <TabiMascot mood="idle" />
             </motion.div>
             <motion.div
@@ -1087,14 +1240,24 @@ export function JourneyExperience() {
               <br />
               旅の精タビに、方角から目的地まで任せよう。
             </motion.p>
-            <motion.div variants={fadeUp} className="mt-8 w-full sm:w-auto">
-              <ActionButton
-                onClick={beginDirectionSelection}
-                icon={<Sparkles size={18} />}
-                className="w-full sm:w-auto"
+            <motion.div
+              variants={fadeUp}
+              className="mt-8 w-full sm:w-auto"
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+            >
+              <motion.div
+                animate={reduceMotion ? undefined : { scale: [1, 1.02, 1] }}
+                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
               >
-                旅をはじめる
-              </ActionButton>
+                <ActionButton
+                  onClick={beginDirectionSelection}
+                  icon={<Sparkles size={18} />}
+                  className="w-full shadow-float sm:w-auto"
+                >
+                  旅をはじめる
+                </ActionButton>
+              </motion.div>
             </motion.div>
 
             <motion.div
@@ -1149,67 +1312,122 @@ export function JourneyExperience() {
               </ExpandPanel>
             </motion.div>
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-3 inline-flex items-center gap-3 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-1.5"
-            >
-              <span className="inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)]">
-                <Users size={14} />
-                人数
-              </span>
-              <div className="inline-flex items-center gap-3">
-                <button
-                  type="button"
-                  onClick={() => setPeople((n) => Math.max(1, n - 1))}
-                  disabled={people <= 1}
-                  aria-label="人数を減らす"
-                  className="grid h-6 w-6 place-items-center rounded-full border border-[color:var(--line)] text-sm font-black text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)] disabled:opacity-40"
-                >
-                  −
-                </button>
-                <span className="min-w-6 text-center text-sm font-black tabular-nums">
-                  {people}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setPeople((n) => Math.min(20, n + 1))}
-                  disabled={people >= 20}
-                  aria-label="人数を増やす"
-                  className="grid h-6 w-6 place-items-center rounded-full border border-[color:var(--line)] text-sm font-black text-[color:var(--foreground)] transition hover:bg-[color:var(--surface-muted)] disabled:opacity-40"
-                >
-                  +
-                </button>
+            <motion.div variants={fadeUp} className="mt-4 w-full max-w-md">
+              <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5 shadow-float">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-2 text-xs font-bold text-[color:var(--muted)]">
+                    <Users size={15} /> 人数
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {Array.from({ length: Math.min(people, 6) }).map((_, i) => (
+                      <motion.span
+                        key={i}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        className="h-2 w-2 rounded-full bg-vermilion"
+                      />
+                    ))}
+                    {people > 6 && (
+                      <span className="text-[10px] font-black text-vermilion">
+                        +{people - 6}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-center gap-6">
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setPeople((n) => Math.max(1, n - 1))}
+                    disabled={people <= 1}
+                    aria-label="人数を減らす"
+                    className="grid h-11 w-11 place-items-center rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] text-xl font-black text-[color:var(--foreground)] transition hover:border-vermilion hover:text-vermilion disabled:opacity-40"
+                  >
+                    −
+                  </motion.button>
+                  <div className="flex min-w-[3.5rem] flex-col items-center">
+                    <AnimatePresence mode="popLayout">
+                      <motion.span
+                        key={people}
+                        initial={{ y: 8, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -8, opacity: 0 }}
+                        className="text-4xl font-black tabular-nums text-[color:var(--foreground)]"
+                      >
+                        {people}
+                      </motion.span>
+                    </AnimatePresence>
+                    <span className="text-[11px] font-bold text-[color:var(--muted)]">
+                      名
+                    </span>
+                  </div>
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    onClick={() => setPeople((n) => Math.min(20, n + 1))}
+                    disabled={people >= 20}
+                    aria-label="人数を増やす"
+                    className="grid h-11 w-11 place-items-center rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] text-xl font-black text-[color:var(--foreground)] transition hover:border-vermilion hover:text-vermilion disabled:opacity-40"
+                  >
+                    +
+                  </motion.button>
+                </div>
+
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {[
+                    { label: "ひとり", value: 1 },
+                    { label: "カップル", value: 2 },
+                    { label: "家族・友達", value: 4 },
+                    { label: "グループ", value: 8 },
+                  ].map((preset) => (
+                    <button
+                      key={preset.value}
+                      type="button"
+                      onClick={() => setPeople(preset.value)}
+                      className={chipClass(people === preset.value)}
+                    >
+                      {preset.label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </motion.div>
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-4 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1"
-            >
-              <button
-                type="button"
-                onClick={() => setJourneyMode("surprise")}
-                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                  journeyMode === "surprise"
-                    ? "bg-vermilion text-white"
-                    : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                }`}
-              >
-                <Wand2 size={13} />
-                驚かせて
-              </button>
-              <button
-                type="button"
-                onClick={() => setJourneyMode("custom")}
-                className={`inline-flex items-center gap-1.5 rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                  journeyMode === "custom"
-                    ? "bg-vermilion text-white"
-                    : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                }`}
-              >
-                <SlidersHorizontal size={13} />
-                設定して探す
-              </button>
+            <motion.div variants={fadeUp} className="mt-8 w-full max-w-md">
+              <p className="mb-2 text-left text-xs font-bold text-[color:var(--muted)]">
+                さがし方
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ChoiceCard
+                  active={journeyMode === "surprise"}
+                  onClick={() => setJourneyMode("surprise")}
+                  visual={
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/mascot/camera.png"
+                      alt=""
+                      className="h-12 w-12 object-contain"
+                    />
+                  }
+                  title="驚かせて"
+                  subtitle="タビにおまかせ"
+                />
+                <ChoiceCard
+                  active={journeyMode === "custom"}
+                  onClick={() => setJourneyMode("custom")}
+                  visual={
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src="/mascot/map.png"
+                      alt=""
+                      className="h-12 w-12 object-contain"
+                    />
+                  }
+                  title="設定して探す"
+                  subtitle="予算・距離で絞る"
+                />
+              </div>
             </motion.div>
 
             {journeyMode === "surprise" ? (
@@ -1219,29 +1437,21 @@ export function JourneyExperience() {
                 animate={{ opacity: 1, y: 0 }}
                 className="flex w-full flex-col items-center"
               >
-                <div className="mt-3 inline-flex rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] p-1">
-                  <button
-                    type="button"
+                <div className="mt-4 grid w-full max-w-md gap-3 sm:grid-cols-2">
+                  <ChoiceCard
+                    active={scope === "nearby"}
                     onClick={() => setScope("nearby")}
-                    className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                      scope === "nearby"
-                        ? "bg-vermilion text-white"
-                        : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                    }`}
-                  >
-                    近場で探す
-                  </button>
-                  <button
-                    type="button"
+                    visual={<Footprints size={26} />}
+                    title="近場で探す"
+                    subtitle="日帰りで行ける範囲"
+                  />
+                  <ChoiceCard
+                    active={scope === "all"}
                     onClick={() => setScope("all")}
-                    className={`rounded-full px-4 py-1.5 text-xs font-bold transition ${
-                      scope === "all"
-                        ? "bg-vermilion text-white"
-                        : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                    }`}
-                  >
-                    全国から探す
-                  </button>
+                    visual={<Globe size={26} />}
+                    title="全国から探す"
+                    subtitle="47都道府県から"
+                  />
                 </div>
                 <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
                   {scope === "nearby"
@@ -1370,14 +1580,37 @@ export function JourneyExperience() {
                   ? "どの方角になるかは、タビだけが知っています。"
                   : "この先にある都道府県から、次の行き先を選びます。"}
               </p>
-              <ActionButton
-                onClick={choosePrefecture}
-                disabled={selecting || !direction}
-                icon={<ArrowRight size={18} />}
-                className="mt-7 w-full sm:w-auto"
-              >
-                この方角へ進む
-              </ActionButton>
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+                <ActionButton
+                  onClick={choosePrefecture}
+                  disabled={selecting || !direction}
+                  icon={<ArrowRight size={18} />}
+                  className="w-full sm:w-auto"
+                >
+                  この方角へ進む
+                </ActionButton>
+                <ActionButton
+                  variant="secondary"
+                  onClick={beginDirectionSelection}
+                  disabled={selecting}
+                  icon={
+                    <motion.span
+                      className="inline-flex"
+                      animate={selecting ? { rotate: -360 } : { rotate: 0 }}
+                      transition={{
+                        duration: 1,
+                        repeat: selecting ? Infinity : 0,
+                        ease: "linear",
+                      }}
+                    >
+                      <RotateCcw size={17} />
+                    </motion.span>
+                  }
+                  className="w-full sm:w-auto"
+                >
+                  {selecting ? "回しています…" : "もう一度回す"}
+                </ActionButton>
+              </div>
             </div>
           </div>
         </motion.section>
@@ -1680,8 +1913,35 @@ export function JourneyExperience() {
                   ),
                 )}
               />
+              <p className="px-1 text-[10px] leading-4 text-[color:var(--muted)]">
+                写真:{" "}
+                <a
+                  href="https://commons.wikimedia.org"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  Wikimedia Commons
+                </a>
+                {" ・ "}
+                <a
+                  href="https://openverse.org"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="underline-offset-2 hover:underline"
+                >
+                  Openverse
+                </a>
+                （各画像の著作権は投稿者に帰属します）
+              </p>
 
-              <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
+              <PlaceTabs
+                key={journey.destination.id}
+                name={journey.destination.name}
+                prefecture={journey.prefecture.nameJa}
+                categories={journey.destination.categories}
+                aiEnabled={aiEnabled}
+              >
                 <h3 className="text-sm font-black">この場所について</h3>
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
@@ -1753,7 +2013,7 @@ export function JourneyExperience() {
                     )}
                   </div>
                 )}
-              </div>
+              </PlaceTabs>
 
               <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
                 <PlaceMap

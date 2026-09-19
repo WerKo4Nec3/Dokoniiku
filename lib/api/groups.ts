@@ -5,19 +5,23 @@ import {
   collection,
   deleteDoc,
   doc,
+  endAt,
   getDoc,
   getDocs,
+  limit,
   limitToLast,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  startAt,
   updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type {
   Group,
+  GroupCover,
   GroupEvent,
   GroupMessage,
   JourneyResult,
@@ -25,22 +29,91 @@ import type {
 
 const MESSAGE_WINDOW = 60;
 
+function nameKey(name: string) {
+  return name.trim().toLowerCase();
+}
+function keywordsOf(name: string): string[] {
+  const lower = nameKey(name);
+  return [...new Set([lower, ...lower.split(/\s+/).filter(Boolean)])].slice(
+    0,
+    12,
+  );
+}
+
 export async function createGroup(
   ownerUid: string,
   name: string,
   emoji: string,
   memberUids: string[],
+  opts?: {
+    visibility?: "public" | "private";
+    about?: string;
+    cover?: GroupCover;
+  },
 ): Promise<string | null> {
   if (!db) return null;
   const members = [...new Set([ownerUid, ...memberUids])];
+  const trimmed = name.trim();
   const ref = await addDoc(collection(db, "groups"), {
-    name,
+    name: trimmed,
+    nameLower: nameKey(trimmed),
+    keywords: keywordsOf(trimmed),
     emoji,
     ownerUid,
     members,
+    visibility: opts?.visibility ?? "private",
+    about: opts?.about?.trim() ?? "",
+    cover: opts?.cover ?? "forest",
     createdAt: serverTimestamp(),
   });
   return ref.id;
+}
+
+// Owner edits name/about/cover/visibility (keeps nameLower in sync so that
+// publishing an old private group makes it discoverable).
+export async function updateGroupMeta(
+  groupId: string,
+  patch: Partial<Pick<Group, "name" | "about" | "cover" | "visibility">>,
+) {
+  if (!db) return;
+  const data: Record<string, unknown> = { ...patch };
+  if (patch.name != null) {
+    const trimmed = patch.name.trim();
+    data.name = trimmed;
+    data.nameLower = nameKey(trimmed);
+    data.keywords = keywordsOf(trimmed);
+  }
+  await updateDoc(doc(db, "groups", groupId), data);
+}
+
+// Prefix search across PUBLIC groups (Firestore has no full-text; this is a
+// lexical prefix range on nameLower — matches from the start of the name).
+export async function searchPublicGroups(term: string): Promise<Group[]> {
+  if (!db) return [];
+  const q = nameKey(term);
+  if (!q) return [];
+  const snapshot = await getDocs(
+    query(
+      collection(db, "groups"),
+      where("visibility", "==", "public"),
+      orderBy("nameLower"),
+      startAt(q),
+      endAt(q + ""),
+      limit(20),
+    ),
+  );
+  return snapshot.docs.map((entry) => ({
+    id: entry.id,
+    ...(entry.data() as Omit<Group, "id">),
+  }));
+}
+
+// Open-join: the rule lets a non-member append only their own uid to members.
+export async function joinPublicGroup(groupId: string, uid: string) {
+  if (!db) return;
+  await updateDoc(doc(db, "groups", groupId), {
+    members: arrayUnion(uid),
+  });
 }
 
 export async function listMyGroups(uid: string): Promise<Group[]> {

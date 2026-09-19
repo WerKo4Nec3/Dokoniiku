@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft, Check, Monitor, Moon, Sun } from "lucide-react";
+import { Check, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
-import { CabinetNav } from "@/components/CabinetNav";
+import { CabinetHeader } from "@/components/CabinetHeader";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -73,22 +71,13 @@ export default function SettingsPage() {
   ];
 
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-24 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={16} />
-        旅にもどる
-      </Link>
-
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="mt-4 text-3xl font-black sm:text-4xl">設定</h1>
-        <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-          見た目をあなた好みに。設定はこの端末に保存されます。
-        </p>
-        <CabinetNav />
-      </motion.div>
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
+      <CabinetHeader
+        eyebrow="カスタマイズ"
+        title="設定"
+        subtitle="見た目をあなた好みに。設定はこの端末に保存されます。"
+        accent="sun"
+      />
 
       <div className="mt-8 space-y-6">
         {/* Theme mode */}

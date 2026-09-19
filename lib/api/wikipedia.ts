@@ -97,6 +97,96 @@ type GeoSearchPage = {
   imageinfo?: { thumburl?: string }[];
 };
 
+// Additional Wikimedia photos: full-text search of the Commons File namespace
+// by place name — broader than a single article's media-list.
+export async function searchCommonsPhotos(
+  query: string,
+  limit = 6,
+): Promise<string[]> {
+  try {
+    const url =
+      "https://commons.wikimedia.org/w/api.php" +
+      `?action=query&format=json&origin=*` +
+      `&generator=search&gsrsearch=${encodeURIComponent(query)}` +
+      `&gsrnamespace=6&gsrlimit=20` +
+      `&prop=imageinfo&iiprop=url&iiurlwidth=800`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = (await response.json()) as {
+      query?: { pages?: Record<string, GeoSearchPage> };
+    };
+    const urls: string[] = [];
+    for (const page of Object.values(data.query?.pages ?? {})) {
+      const title = page.title ?? "";
+      if (!/\.(jpe?g|png|webp)$/i.test(title) || !looksLikePhoto(title)) continue;
+      const thumb = page.imageinfo?.[0]?.thumburl;
+      if (thumb && !urls.includes(thumb)) urls.push(thumb);
+      if (urls.length >= limit) break;
+    }
+    return urls;
+  } catch {
+    return [];
+  }
+}
+
+// Normalise a Wikimedia/Openverse URL so the same image at different sizes or
+// query strings dedupes to a single key.
+function photoKey(url: string): string {
+  return url
+    .replace(/^https?:/, "")
+    .replace(/\/\d+px-/, "/")
+    .replace(/\?.*$/, "")
+    .toLowerCase();
+}
+
+// Merge ordered photo groups: earlier groups win, dedupe by normalised key,
+// keep only plausible photos, cap the total.
+export function mergePhotos(groups: string[][], limit = 12): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const group of groups) {
+    for (const url of group) {
+      if (!url || !looksLikePhoto(url)) continue;
+      const key = photoKey(url);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(url);
+      if (out.length >= limit) return out;
+    }
+  }
+  return out;
+}
+
+// Several short "豆知識" facts, keyless: the full lead-section plaintext from the
+// Action API, split into sentences. Broader than the REST summary.
+export async function getDestinationFacts(
+  name: string,
+  max = 5,
+): Promise<string[]> {
+  try {
+    const url =
+      "https://ja.wikipedia.org/w/api.php" +
+      `?action=query&format=json&origin=*&redirects=1` +
+      `&prop=extracts&explaintext=1&exintro=1&exsectionformat=plain` +
+      `&titles=${encodeURIComponent(name)}`;
+    const response = await fetch(url);
+    if (!response.ok) return [];
+    const data = (await response.json()) as {
+      query?: { pages?: Record<string, { extract?: string }> };
+    };
+    const extract = Object.values(data.query?.pages ?? {})[0]?.extract ?? "";
+    return extract
+      .replace(/\n+/g, " ")
+      .split(/(?<=。)/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 12 && s.length <= 140 && s.endsWith("。"))
+      .filter((s) => !/^[ぁ-んー、・（）\s]+。$/.test(s))
+      .slice(0, max);
+  } catch {
+    return [];
+  }
+}
+
 // Last-resort photo source: pictures taken near the place's coordinates,
 // via the Wikimedia Commons geosearch API (no key, CORS-enabled).
 export async function getNearbyPhotos(

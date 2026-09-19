@@ -14,7 +14,7 @@ export function ActionButton({
 }: ActionButtonProps) {
   const variants = {
     primary:
-      "bg-vermilion text-white shadow-lg shadow-vermilion/20 hover:bg-[#d94932]",
+      "bg-vermilion text-white shadow-lg shadow-vermilion/20 hover:opacity-90",
     secondary:
       "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground)] hover:bg-[color:var(--surface-muted)]",
     ghost:

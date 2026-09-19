@@ -1,16 +1,13 @@
 "use client";
 
-import Link from "next/link";
-import { motion } from "framer-motion";
-import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { useUserJourneys } from "@/lib/hooks/cabinet";
+import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { ensurePublicProfile } from "@/lib/api/social";
 import { statusOf } from "@/lib/utils/travel";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { CabinetNav } from "@/components/CabinetNav";
+import { CabinetHeader } from "@/components/CabinetHeader";
 import { JapanGeoMap } from "@/components/JapanGeoMap";
 import { ProfileCard } from "@/components/ProfileCard";
 import type { TabibitoProfile } from "@/types";
@@ -18,6 +15,7 @@ import type { TabibitoProfile } from "@/types";
 export default function ProfilePage() {
   const { linkGoogleAccount } = useAuth();
   const { enabled, loading, user, journeys } = useUserJourneys();
+  const openJourney = useOpenJourney();
   const [profile, setProfile] = useState<TabibitoProfile | null>(null);
 
   useEffect(() => {
@@ -61,22 +59,14 @@ export default function ProfilePage() {
   }
 
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-4 pb-20 pt-24 sm:px-6">
-      <Link
-        href="/"
-        className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={16} />
-        旅にもどる
-      </Link>
-
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="mt-4 text-3xl font-black sm:text-4xl">プロフィール</h1>
-        <p className="mt-2 text-sm font-medium text-[color:var(--muted)]">
-          あなたの旅人ステータスと、日本の制覇マップ。
-        </p>
-        <CabinetNav />
-      </motion.div>
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-5xl px-4 pb-20 pt-32 sm:px-6">
+      <CabinetHeader
+        eyebrow="あなたの記録"
+        title="プロフィール"
+        subtitle="あなたの旅人ステータスと、日本の制覇マップ。"
+        mascot="camera"
+        accent="forest"
+      />
 
       {!enabled && (
         <p className="mt-10 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 text-sm font-medium text-[color:var(--muted)]">
@@ -140,7 +130,7 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <JapanGeoMap journeys={journeys ?? []} />
+          <JapanGeoMap journeys={journeys ?? []} onOpenJourney={openJourney} />
         </div>
       )}
     </section>

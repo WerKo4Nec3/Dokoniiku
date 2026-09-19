@@ -58,15 +58,31 @@ service cloud.firestore {
         return get(/databases/$(database)/documents/groups/$(groupId)).data.members;
       }
 
-      allow read: if signedIn() && request.auth.uid in resource.data.members;
+      // Members read any group they belong to; anyone signed-in may read a
+      // group explicitly marked public (so discover/search + the preview page
+      // work). Private groups without the flag stay member-only.
+      allow read: if signedIn() && (
+        request.auth.uid in resource.data.members
+        || resource.data.visibility == "public"
+      );
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.auth.uid in request.resource.data.members;
-      // Members can rename or adjust the member list (adding friends,
-      // leaving); ownership never changes hands.
-      allow update: if signedIn()
-        && request.auth.uid in resource.data.members
-        && request.resource.data.ownerUid == resource.data.ownerUid;
+      // (a) an existing member edits (rename / invite / leave); owner fixed.
+      // (b) a non-member SELF-JOINS a public group: the ONLY change allowed is
+      //     appending their own uid to `members` — nothing else may move.
+      allow update: if signedIn() && (
+        (
+          request.auth.uid in resource.data.members
+          && request.resource.data.ownerUid == resource.data.ownerUid
+        )
+        || (
+          resource.data.visibility == "public"
+          && !(request.auth.uid in resource.data.members)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["members"])
+          && request.resource.data.members == resource.data.members.concat([request.auth.uid])
+        )
+      );
       allow delete: if signedIn()
         && resource.data.ownerUid == request.auth.uid;
 
