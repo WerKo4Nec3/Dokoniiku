@@ -9,6 +9,7 @@ import {
   CalendarDays,
   Car,
   Check,
+  Link2,
   ChevronRight,
   Cloud,
   CloudRain,
@@ -48,6 +49,7 @@ import {
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { readPreferences } from "@/lib/preferences";
+import { encodeTrip } from "@/lib/tripShare";
 import {
   getDestinationImages,
   getDestinationSummary,
@@ -455,6 +457,7 @@ export function JourneyExperience() {
   const budgetMax = Math.max(BUDGET_MIN, BUDGET_PER_PERSON_MAX * people);
   const [savedJourneyId, setSavedJourneyId] = useState<string | null>(null);
   const [shareFeedback, setShareFeedback] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [aiText, setAiText] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiPlan, setAiPlan] = useState<string | null>(null);
@@ -935,6 +938,18 @@ export function JourneyExperience() {
     setNotice(null);
     setFilterNotice(null);
     setStage("result");
+  }
+
+  async function handleCopyLink() {
+    if (!journey) return;
+    const url = `${window.location.origin}/trip?d=${encodeTrip(journey)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // clipboard blocked — nothing to do
+    }
   }
 
   async function handleShare() {
@@ -2266,6 +2281,15 @@ export function JourneyExperience() {
                 className="order-8 w-full lg:order-none"
               >
                 {shareFeedback ? "画像を保存＆コピーしました" : "この旅を共有"}
+              </ActionButton>
+
+              <ActionButton
+                variant="ghost"
+                onClick={handleCopyLink}
+                icon={linkCopied ? <Check size={18} /> : <Link2 size={18} />}
+                className="order-8 w-full lg:order-none"
+              >
+                {linkCopied ? "リンクをコピーしました" : "共有リンクをコピー"}
               </ActionButton>
             </div>
           </motion.div>
