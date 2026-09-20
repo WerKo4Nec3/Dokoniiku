@@ -47,9 +47,10 @@ function upscaleThumb(src: string): string {
 }
 
 // Files that are diagrams rather than photos: icons, logos, flags, and —
-// very common on small-place articles — location/relief maps.
+// very common on small-place articles — location/relief maps, aerial/satellite
+// imagery, and technical plans (castle layouts, cross-sections, blueprints).
 const NON_PHOTO =
-  /icon|logo|flag|locat|\bmap\b|_map|map_|地図|位置|地形|relief|topograph|globe|emblem|crest|seal|banner|chart|diagram|montage|\.svg|\.gif|\.pdf|\.tif/i;
+  /icon|logo|flag|locat|\bmap\b|_map|map_|地図|位置図?|地形|relief|topograph|globe|emblem|crest|seal|banner|chart|diagram|montage|aerial|satellite|orthophoto|birdseye|鳥瞰|俯瞰|航空写真|衛星|縄張|平面図|断面|図面|blueprint|sketch|schematic|国土地理院|openstreetmap|\bosm\b|\.svg|\.gif|\.pdf|\.tif/i;
 
 // True when a file name / URL plausibly points at an actual photo.
 export function looksLikePhoto(nameOrUrl: string): boolean {
