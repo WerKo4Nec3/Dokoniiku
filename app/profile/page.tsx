@@ -10,6 +10,7 @@ import { computeXp, levelForXp } from "@/lib/utils/gamification";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { FriendLeaderboard } from "@/components/FriendLeaderboard";
+import { PassportStamps } from "@/components/PassportStamps";
 import { JapanGeoMap } from "@/components/JapanGeoMap";
 import { ProfileCard } from "@/components/ProfileCard";
 import { ProfileGameStats } from "@/components/ProfileGameStats";
@@ -121,6 +122,8 @@ export default function ProfilePage() {
           />
 
           <JapanGeoMap journeys={journeys ?? []} onOpenJourney={openJourney} />
+
+          <PassportStamps journeys={journeys ?? []} />
         </div>
       )}
     </section>

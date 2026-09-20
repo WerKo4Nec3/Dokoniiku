@@ -8,6 +8,7 @@ import {
   computeAchievements,
   computeStats,
   computeStreak,
+  computeWeeklyChallenge,
   computeXp,
   levelForXp,
 } from "@/lib/utils/gamification";
@@ -17,7 +18,7 @@ export function ProfileGameStats({
 }: {
   journeys: SavedJourney[];
 }) {
-  const { xp, level, stats, achievements, streak } = useMemo(() => {
+  const { xp, level, stats, achievements, streak, challenge } = useMemo(() => {
     const xp = computeXp(journeys);
     return {
       xp,
@@ -25,6 +26,7 @@ export function ProfileGameStats({
       stats: computeStats(journeys),
       achievements: computeAchievements(journeys),
       streak: computeStreak(journeys, Date.now()),
+      challenge: computeWeeklyChallenge(journeys, Date.now()),
     };
   }, [journeys]);
 
@@ -89,6 +91,36 @@ export function ProfileGameStats({
               </div>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Weekly mission */}
+      <div
+        className={`rounded-2xl border p-4 sm:p-5 ${
+          challenge.done
+            ? "border-forest/40 bg-forest/5"
+            : "border-[color:var(--line)] bg-[color:var(--surface)]"
+        }`}
+      >
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-sun/15 text-2xl">
+            {challenge.emoji}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-black text-[color:var(--muted)]">
+              今週のミッション
+            </p>
+            <p className="text-sm font-black">{challenge.label}</p>
+          </div>
+          {challenge.done ? (
+            <span className="shrink-0 rounded-full bg-forest px-3 py-1 text-xs font-black text-white">
+              達成！
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-full bg-[color:var(--surface-muted)] px-3 py-1 text-xs font-black text-[color:var(--muted)] tabular-nums">
+              {challenge.current}/{challenge.target}
+            </span>
+          )}
         </div>
       </div>
 

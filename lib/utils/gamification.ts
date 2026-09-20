@@ -123,6 +123,60 @@ export function computeStreak(
   return { current, best };
 }
 
+// ---- Weekly challenge ----
+
+type Mission = {
+  emoji: string;
+  label: string;
+  category: DestinationCategory | null; // null = any completed place
+};
+
+const MISSIONS: Mission[] = [
+  { emoji: "♨️", label: "今週、温泉を1つ楽しむ", category: "hot-spring" },
+  { emoji: "🗻", label: "今週、絶景スポットへ行く", category: "viewpoint" },
+  { emoji: "🍜", label: "今週、ご当地グルメを味わう", category: "food" },
+  { emoji: "⛩️", label: "今週、神社・お寺を訪れる", category: "shrine" },
+  { emoji: "🏯", label: "今週、歴史スポットを巡る", category: "history" },
+  { emoji: "🗺️", label: "今週、新しい場所を1つ制覇する", category: null },
+];
+
+export type WeeklyChallenge = {
+  emoji: string;
+  label: string;
+  current: number;
+  target: number;
+  done: boolean;
+};
+
+export function computeWeeklyChallenge(
+  journeys: SavedJourney[],
+  nowMs: number,
+): WeeklyChallenge {
+  const nowWeek = Math.floor((nowMs - MONDAY_ANCHOR) / WEEK_MS);
+  const mission =
+    MISSIONS[((nowWeek % MISSIONS.length) + MISSIONS.length) % MISSIONS.length];
+  let current = 0;
+  for (const journey of journeys) {
+    if (statusOf(journey) !== "done") continue;
+    const iso = journey.plannedDate ?? journey.createdAt;
+    const week = iso ? weekIndexOf(iso) : null;
+    if (week !== nowWeek) continue;
+    if (
+      mission.category === null ||
+      journey.destination.categories.includes(mission.category)
+    ) {
+      current += 1;
+    }
+  }
+  return {
+    emoji: mission.emoji,
+    label: mission.label,
+    current: Math.min(current, 1),
+    target: 1,
+    done: current >= 1,
+  };
+}
+
 // ---- Stats ----
 
 export type ProfileStats = {
