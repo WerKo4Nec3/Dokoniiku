@@ -1,11 +1,24 @@
 "use client";
 
-import { ChevronLeft, ChevronRight, MapPin, Undo2 } from "lucide-react";
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  Download,
+  MapPin,
+  Undo2,
+} from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { setJourneyDate } from "@/lib/api/savedJourneys";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
+import { PlannedWeatherBadge } from "@/components/PlannedWeatherBadge";
+import {
+  googleCalendarUrl,
+  icsDataUrl,
+  icsFileName,
+} from "@/lib/calendarExport";
 import type { SavedJourney } from "@/types";
 
 const WEEKDAYS = ["日", "月", "火", "水", "木", "金", "土"];
@@ -47,6 +60,15 @@ export default function CalendarPage() {
     }
     return map;
   }, [journeys]);
+
+  const todayYmd = ymd(today);
+  const upcoming = useMemo(
+    () =>
+      (journeys ?? [])
+        .filter((j) => j.plannedDate && j.plannedDate >= todayYmd)
+        .sort((a, b) => (a.plannedDate ?? "").localeCompare(b.plannedDate ?? "")),
+    [journeys, todayYmd],
+  );
 
   const cells = useMemo(() => {
     const year = cursor.getFullYear();
@@ -167,6 +189,82 @@ export default function CalendarPage() {
 
       {enabled && user && (
         <div className="mt-8">
+          {upcoming.length > 0 && (
+            <div className="mb-6 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 sm:p-5">
+              <h2 className="text-sm font-black">近日の予定</h2>
+              <ul className="mt-3 space-y-2">
+                {upcoming.map((journey) => {
+                  const gcal = googleCalendarUrl(journey);
+                  const ics = icsDataUrl(journey);
+                  return (
+                    <li
+                      key={journey.id}
+                      className="flex items-center gap-3 rounded-lg border border-[color:var(--line)] p-2.5"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => openJourney(journey)}
+                        aria-label={journey.destination.name}
+                        className="h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-forest/10 bg-cover bg-center"
+                        style={
+                          journey.destination.imageUrl
+                            ? {
+                                backgroundImage: `url('${journey.destination.imageUrl}')`,
+                              }
+                            : undefined
+                        }
+                      >
+                        {!journey.destination.imageUrl && (
+                          <span className="grid h-full w-full place-items-center text-forest/50">
+                            <MapPin size={16} />
+                          </span>
+                        )}
+                      </button>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black">
+                          {journey.destination.name}
+                        </p>
+                        <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-bold text-[color:var(--muted)]">
+                          <span className="text-vermilion">
+                            {journey.plannedDate!.slice(5).replace("-", "/")}
+                          </span>
+                          <PlannedWeatherBadge
+                            latitude={journey.destination.latitude}
+                            longitude={journey.destination.longitude}
+                            date={journey.plannedDate!}
+                          />
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        {gcal && (
+                          <a
+                            href={gcal}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Googleカレンダーに追加"
+                            className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-[color:var(--surface-muted)] hover:text-vermilion"
+                          >
+                            <CalendarPlus size={16} />
+                          </a>
+                        )}
+                        {ics && (
+                          <a
+                            href={ics}
+                            download={icsFileName(journey)}
+                            title=".ics をダウンロード"
+                            className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-[color:var(--surface-muted)] hover:text-vermilion"
+                          >
+                            <Download size={15} />
+                          </a>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
+
           <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4 sm:p-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-black">
