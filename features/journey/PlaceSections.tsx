@@ -43,11 +43,13 @@ export function FactsCard({
   prefecture,
   aiEnabled,
   categories,
+  className = "",
 }: {
   name: string;
   prefecture: string;
   aiEnabled: boolean;
   categories: DestinationCategory[];
+  className?: string;
 }) {
   const [facts, setFacts] = useState<string[] | null>(null);
   const [aiFacts, setAiFacts] = useState<string[] | null>(null);
@@ -89,7 +91,7 @@ export function FactsCard({
   const empty = facts !== null && facts.length === 0 && !aiFacts;
 
   return (
-    <div className={CARD}>
+    <div className={`${CARD} ${className}`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
         <Lightbulb size={16} className="text-sun" />
         豆知識
@@ -165,9 +167,11 @@ function VideoSkeleton() {
 export function VideosCard({
   name,
   prefecture,
+  className = "",
 }: {
   name: string;
   prefecture: string;
+  className?: string;
 }) {
   const [videos, setVideos] = useState<Video[] | null>(null);
   const q = (extra = "") => `${name} ${prefecture} ${extra}`.trim();
@@ -196,7 +200,7 @@ export function VideosCard({
   const hasEmbeds = Boolean(videos && videos.length > 0);
 
   return (
-    <div className={CARD}>
+    <div className={`${CARD} ${className}`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
         <Youtube size={16} className="text-vermilion" />
         動画
@@ -291,9 +295,11 @@ function NearbySkeleton() {
 export function NearbyCard({
   latitude,
   longitude,
+  className = "",
 }: {
   latitude: number;
   longitude: number;
+  className?: string;
 }) {
   const [groups, setGroups] = useState<NearbyGroup[] | null>(null);
 
@@ -314,7 +320,7 @@ export function NearbyCard({
     )}/@${latitude},${longitude},15z`;
 
   return (
-    <div className={CARD}>
+    <div className={`${CARD} ${className}`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
         <MapPinned size={16} className="text-forest dark:text-[#8fd0b9]" />
         周辺スポット

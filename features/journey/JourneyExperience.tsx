@@ -1916,10 +1916,14 @@ export function JourneyExperience() {
             variants={staggerParent}
             initial="hidden"
             animate="show"
-            className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_.8fr]"
+            className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[1.2fr_.8fr]"
           >
-            <motion.div variants={fadeUp} className="min-w-0 space-y-6">
+            {/* On mobile every block is flattened into one column and reordered
+                via `order-*` (weather/budget up, videos/map down); on desktop
+                the two columns return via `lg:block`. */}
+            <div className="contents lg:block lg:min-w-0 lg:space-y-6">
               <ImageGallery
+                className="order-1 lg:order-none"
                 images={
                   journey.destination.images?.length
                     ? journey.destination.images
@@ -1935,7 +1939,7 @@ export function JourneyExperience() {
                   ),
                 )}
               />
-              <p className="px-1 text-[10px] leading-4 text-[color:var(--muted)]">
+              <p className="order-1 px-1 text-[10px] leading-4 text-[color:var(--muted)] lg:order-none">
                 写真:{" "}
                 <a
                   href="https://commons.wikimedia.org"
@@ -1957,7 +1961,7 @@ export function JourneyExperience() {
                 （各画像の著作権は投稿者に帰属します）
               </p>
 
-              <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6">
+              <div className="order-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 lg:order-none">
                 <h3 className="text-sm font-black">この場所について</h3>
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
@@ -2033,6 +2037,7 @@ export function JourneyExperience() {
 
               <FactsCard
                 key={`facts-${journey.destination.id}`}
+                className="order-9 lg:order-none"
                 name={journey.destination.name}
                 prefecture={journey.prefecture.nameJa}
                 categories={journey.destination.categories}
@@ -2041,17 +2046,19 @@ export function JourneyExperience() {
 
               <VideosCard
                 key={`videos-${journey.destination.id}`}
+                className="order-11 lg:order-none"
                 name={journey.destination.name}
                 prefecture={journey.prefecture.nameJa}
               />
 
               <NearbyCard
                 key={`nearby-${journey.destination.id}`}
+                className="order-10 lg:order-none"
                 latitude={journey.destination.latitude}
                 longitude={journey.destination.longitude}
               />
 
-              <div className="overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)]">
+              <div className="order-12 min-w-0 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] lg:order-none">
                 <PlaceMap
                   key={journey.destination.id}
                   latitude={journey.destination.latitude}
@@ -2071,7 +2078,7 @@ export function JourneyExperience() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="order-12 flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-forest/10 text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]">
                     <MapPin size={20} />
@@ -2095,10 +2102,10 @@ export function JourneyExperience() {
                   <ExternalLink size={16} />
                 </a>
               </div>
-            </motion.div>
+            </div>
 
-            <motion.div variants={fadeUp} className="min-w-0 space-y-4">
-              <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+            <div className="contents lg:block lg:min-w-0 lg:space-y-4">
+              <div className="order-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-[color:var(--muted)]">
@@ -2138,7 +2145,7 @@ export function JourneyExperience() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="order-4 grid grid-cols-2 gap-4 lg:order-none">
                 <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                   <TransportIcon
                     mode={journey.transport}
@@ -2175,7 +2182,7 @@ export function JourneyExperience() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+              <div className="order-5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
                 <h3 className="text-sm font-black">
                   費用の内訳
                   <span className="ml-1.5 text-xs font-bold text-[color:var(--muted)]">
@@ -2213,7 +2220,7 @@ export function JourneyExperience() {
                 </p>
               </div>
 
-              <div className="flex items-start gap-3 rounded-lg bg-forest p-5 text-white">
+              <div className="order-6 flex items-start gap-3 rounded-lg bg-forest p-5 text-white lg:order-none">
                 <TabiMascot mood="excited" size="small" />
                 <div className="pt-3">
                   <p className="text-xs font-bold text-[#bfe7d8]">
@@ -2236,7 +2243,7 @@ export function JourneyExperience() {
                         <Bookmark size={18} />
                       )
                     }
-                    className="w-full"
+                    className="order-7 w-full lg:order-none"
                   >
                     {savedJourneyId === journey.id
                       ? "保存しました"
@@ -2246,7 +2253,7 @@ export function JourneyExperience() {
                   <ActionButton
                     onClick={() => signInWithGoogle().catch(() => {})}
                     icon={<Bookmark size={18} />}
-                    className="w-full"
+                    className="order-7 w-full lg:order-none"
                   >
                     ログインして保存
                   </ActionButton>
@@ -2256,11 +2263,11 @@ export function JourneyExperience() {
                 variant="ghost"
                 onClick={handleShare}
                 icon={shareFeedback ? <Check size={18} /> : <Share2 size={18} />}
-                className="w-full"
+                className="order-8 w-full lg:order-none"
               >
                 {shareFeedback ? "画像を保存＆コピーしました" : "この旅を共有"}
               </ActionButton>
-            </motion.div>
+            </div>
           </motion.div>
 
           <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-[color:var(--line)] pt-8 sm:flex-row">
