@@ -2069,6 +2069,7 @@ export function JourneyExperience() {
               <NearbyCard
                 key={`nearby-${journey.destination.id}`}
                 className="order-10 lg:order-none"
+                placeName={journey.destination.name}
                 latitude={journey.destination.latitude}
                 longitude={journey.destination.longitude}
               />

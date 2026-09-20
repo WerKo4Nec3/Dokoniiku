@@ -295,10 +295,12 @@ function NearbySkeleton() {
 export function NearbyCard({
   latitude,
   longitude,
+  placeName = "",
   className = "",
 }: {
   latitude: number;
   longitude: number;
+  placeName?: string;
   className?: string;
 }) {
   const [groups, setGroups] = useState<NearbyGroup[] | null>(null);
@@ -319,12 +321,54 @@ export function NearbyCard({
       term,
     )}/@${latitude},${longitude},15z`;
 
+  // A simple half-day flow: the place, then the nearest lunch spot and onsen.
+  const course = (() => {
+    if (!groups || !placeName) return [];
+    const nearestOf = (c: NearbyCategory) =>
+      groups.find((g) => g.category === c)?.nearest;
+    const steps: {
+      time: string;
+      emoji: string;
+      name: string;
+      distanceM?: number;
+    }[] = [{ time: "午前", emoji: "📍", name: placeName }];
+    const food = nearestOf("food");
+    if (food) steps.push({ time: "昼", emoji: "🍽️", name: food.name, distanceM: food.distanceM });
+    const onsen = nearestOf("onsen");
+    if (onsen) steps.push({ time: "午後", emoji: "♨️", name: onsen.name, distanceM: onsen.distanceM });
+    return steps.length >= 2 ? steps : [];
+  })();
+
   return (
     <div className={`${CARD} ${className}`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
         <MapPinned size={16} className="text-forest dark:text-[#8fd0b9]" />
         周辺スポット
       </h3>
+
+      {course.length >= 2 && (
+        <div className="mt-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--background)] p-3">
+          <p className="text-xs font-black">モデルコース（半日）</p>
+          <ol className="mt-2 space-y-2">
+            {course.map((step, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <span className="w-8 shrink-0 text-[10px] font-black text-vermilion">
+                  {step.time}
+                </span>
+                <span aria-hidden>{step.emoji}</span>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                  {step.name}
+                </span>
+                {step.distanceM != null && (
+                  <span className="shrink-0 text-[10px] font-medium text-[color:var(--muted)]">
+                    {formatDistance(step.distanceM)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
 
       {groups === null ? (
         <NearbySkeleton />
