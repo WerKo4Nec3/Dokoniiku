@@ -306,3 +306,49 @@ a:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---- Map reveal (loading) + shuffle candidate pins ---- */
+.reveal-pulse {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: reveal-pulse 1.6s ease-out infinite;
+}
+@keyframes reveal-pulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(1.9); opacity: 0; }
+}
+.leaflet-tooltip.reveal-tip {
+  border: none;
+  border-radius: 9999px;
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 900;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+.shuffle-pin {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9999px;
+  background: var(--pin, #e8583e);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 900;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.3);
+  transition: transform 0.15s ease;
+  cursor: pointer;
+}
+.shuffle-pin:hover,
+.shuffle-pin.is-active {
+  transform: scale(1.2);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal-pulse { animation: none; }
+}
+
+/* Dark mode: calm the bright OSM tiles so maps sit in the dark UI. */
+.dark .leaflet-tile-pane {
+  filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85) saturate(0.6);
+}

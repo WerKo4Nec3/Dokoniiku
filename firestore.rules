@@ -122,6 +122,72 @@ service cloud.firestore {
       }
     }
 
+    // ---- Place ratings (👍/👎). Counters are public (the randomizer drops
+    // heavily-disliked places for everyone), votes are private per user. The
+    // counters may only move in exact lock-step with the caller's own vote doc
+    // changing in the same transaction — no ballot stuffing.
+    match /placeRatings/{placeId} {
+      function votePath() {
+        return /databases/$(database)/documents/placeRatings/$(placeId)/votes/$(request.auth.uid);
+      }
+      function hadVote() { return exists(votePath()); }
+      function before() { return get(votePath()).data.value; }
+      function after() { return getAfter(votePath()).data.value; }
+      function freshVoteAfterWrite() {
+        return existsAfter(votePath())
+          && getAfter(votePath()).data.updatedAt == request.time;
+      }
+
+      allow read: if true;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(["up", "down", "name", "prefecture", "updatedAt"])
+        && request.resource.data.updatedAt == request.time
+        && !hadVote()
+        && freshVoteAfterWrite()
+        && ((after() == 1 && request.resource.data.up == 1 && request.resource.data.down == 0)
+          || (after() == -1 && request.resource.data.up == 0 && request.resource.data.down == 1));
+
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["up", "down", "updatedAt"])
+        && request.resource.data.updatedAt == request.time
+        && freshVoteAfterWrite()
+        && (
+          (!hadVote() && after() == 1
+            && request.resource.data.up == resource.data.up + 1
+            && request.resource.data.down == resource.data.down)
+          || (!hadVote() && after() == -1
+            && request.resource.data.up == resource.data.up
+            && request.resource.data.down == resource.data.down + 1)
+          || (hadVote() && before() == 1 && after() == -1
+            && request.resource.data.up == resource.data.up - 1
+            && request.resource.data.down == resource.data.down + 1)
+          || (hadVote() && before() == -1 && after() == 1
+            && request.resource.data.up == resource.data.up + 1
+            && request.resource.data.down == resource.data.down - 1)
+        );
+
+      match /votes/{uid} {
+        // A vote may only change together with the counters (same transaction).
+        function counterWrittenNow() {
+          return existsAfter(/databases/$(database)/documents/placeRatings/$(placeId))
+            && getAfter(/databases/$(database)/documents/placeRatings/$(placeId)).data.updatedAt == request.time;
+        }
+        allow read: if signedIn() && request.auth.uid == uid;
+        allow create: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(["value", "updatedAt"])
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && request.resource.data.updatedAt == request.time
+          && counterWrittenNow();
+        allow update: if signedIn() && request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(["value", "updatedAt"])
+          && (request.resource.data.value == 1 || request.resource.data.value == -1)
+          && request.resource.data.value != resource.data.value
+          && request.resource.data.updatedAt == request.time
+          && counterWrittenNow();
+      }
+    }
+
     // ---- Cards shared between friends. `friendshipId` must point at an
     // existing friendship that contains both sides.
     match /sharedCards/{cardId} {

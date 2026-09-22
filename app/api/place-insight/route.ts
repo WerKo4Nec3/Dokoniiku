@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 
 type InsightBody = {
-  kind?: "insight" | "plan" | "facts";
+  kind?: "insight" | "plan" | "facts" | "menu";
   name?: string;
   prefecture?: string;
   categories?: string[];
@@ -60,6 +60,9 @@ export async function POST(request: Request) {
         : "";
     prompt = `あなたは日本の旅の精「タビ」です。次の場所への日帰り旅の1日プランを、親しみやすい日本語で提案してください。形式は「朝：」「昼：」「夕方：」の3行（各1〜2文）と、最後に「持ち物：」1行（天気に合わせて2〜3点）。全体で250文字前後。誇張や不確かな事実は避け、マークダウンは使わないでください。\n${placeLine}${weatherLine}${travelLine}`;
     maxTokens = 768;
+  } else if (body.kind === "menu") {
+    prompt = `あなたは日本の旅の精「タビ」です。次の飲食スポットで楽しめる代表的なメニュー・名物料理を3〜4つ挙げてください。各行を「・料理名 — ひとこと説明（30文字前後）」の形式で書き、価格は書かないでください。その店について確かな情報がない場合は、その地域でよく知られた名物料理を挙げ、推測であることが分かる書き方にしてください。マークダウンは使わないでください。\n${placeLine}`;
+    maxTokens = 512;
   } else if (body.kind === "facts") {
     prompt = `あなたは日本の旅の精「タビ」です。次の場所について、旅行者が「へぇ！」と思う豆知識を3つ挙げてください。各行を「・」で始め、それぞれ40〜60文字、事実に基づき、誇張や不確かな情報は避けてください。マークダウンは使わないでください。\n${placeLine}`;
     maxTokens = 512;

@@ -37,7 +37,7 @@ import {
   WalletCards,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -50,6 +50,8 @@ import {
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { readPreferences } from "@/lib/preferences";
 import { encodeTrip } from "@/lib/tripShare";
+import { getExcludedPlaceIds } from "@/lib/api/ratings";
+import { PlaceRating } from "@/components/PlaceRating";
 import {
   getDestinationImages,
   getDestinationSummary,
@@ -114,7 +116,12 @@ import {
 } from "@/components/journey/CategoryCard";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { ImageGallery } from "./ImageGallery";
-import { FactsCard, NearbyCard, VideosCard } from "./PlaceSections";
+import {
+  FactsCard,
+  MenuCard,
+  NearbyCard,
+  VideosCard,
+} from "./PlaceSections";
 import { JourneySkeleton } from "./JourneySkeleton";
 
 // Leaflet touches `window`, so load the interactive map client-side only.
@@ -122,6 +129,18 @@ const PlaceMap = dynamic(() => import("./PlaceMap"), {
   ssr: false,
   loading: () => (
     <div className="h-60 w-full animate-pulse bg-[color:var(--surface-muted)]" />
+  ),
+});
+const RevealMap = dynamic(() => import("./RevealMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full animate-pulse bg-[color:var(--surface-muted)]" />
+  ),
+});
+const ShuffleMap = dynamic(() => import("./ShuffleMap"), {
+  ssr: false,
+  loading: () => (
+    <div className="h-full w-full animate-pulse bg-[color:var(--surface-muted)]" />
   ),
 });
 
@@ -468,6 +487,33 @@ export function JourneyExperience() {
     placesNotice?: string;
   } | null>(null);
   const [shuffleOptions, setShuffleOptions] = useState<Plan[]>([]);
+  const [shuffleHover, setShuffleHover] = useState<string | null>(null);
+  const [revealTarget, setRevealTarget] = useState<{
+    latitude: number;
+    longitude: number;
+    name: string;
+    prefecture: string;
+  } | null>(null);
+  // Warm up the map chunks early so the reveal starts instantly.
+  useEffect(() => {
+    if (stage === "direction" || stage === "prefecture") {
+      void import("./RevealMap");
+      void import("./ShuffleMap");
+    }
+  }, [stage]);
+
+  // Resolved by RevealMap when the fly-in lands (see finalizePlan).
+  const revealLanded = useRef<(() => void) | null>(null);
+  const shufflePoints = useMemo(
+    () =>
+      shuffleOptions.map((plan) => ({
+        id: plan.destination.id,
+        name: plan.destination.name,
+        latitude: plan.destination.latitude,
+        longitude: plan.destination.longitude,
+      })),
+    [shuffleOptions],
+  );
 
   const { user, enabled: authEnabled, signInWithGoogle } = useAuth();
 
@@ -617,13 +663,6 @@ export function JourneyExperience() {
     tripLengthOptions.find((option) => option.id === tripLength)
       ?.maxOneWayMinutes ?? 180;
 
-  const chipClass = (active: boolean) =>
-    `rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-      active
-        ? "border-vermilion bg-vermilion/10 text-vermilion"
-        : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-    }`;
-
   function beginDirectionSelection() {
     setStage("direction");
     setDirection(null);
@@ -685,7 +724,9 @@ export function JourneyExperience() {
     setFilterNotice(null);
 
     const places = await getAttractionsByPrefecture(prefecture, selectedCategories);
-    const candidates = places.data;
+    // Drop places the community disliked (and ones you 👎'd yourself).
+    const excluded = await getExcludedPlaceIds(user?.uid);
+    const candidates = places.data.filter((place) => !excluded.has(place.id));
 
     if (!candidates.length) {
       setFilterNotice(
@@ -748,6 +789,15 @@ export function JourneyExperience() {
   ) {
     if (!direction || !prefecture) return;
     setStage("loading");
+    setRevealTarget({
+      latitude: plan.destination.latitude,
+      longitude: plan.destination.longitude,
+      name: plan.destination.name,
+      prefecture: prefecture.nameJa,
+    });
+    const landed = new Promise<void>((resolve) => {
+      revealLanded.current = resolve;
+    });
     const startedAt = nowMs();
     const picked = plan.destination;
     const transport = plan.transport;
@@ -791,8 +841,15 @@ export function JourneyExperience() {
       transport,
       transfer,
     );
-    const minimumWait = Math.max(0, 1100 - (nowMs() - startedAt));
-    await new Promise((resolve) => window.setTimeout(resolve, minimumWait));
+    // Hold the result until the Japan → place fly-in has landed (plus a beat
+    // to see the pin + name), but never longer than ~7s in total.
+    const pause = (ms: number) =>
+      new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+    await Promise.race([
+      landed.then(() => pause(1100)),
+      pause(Math.max(0, 7000 - (nowMs() - startedAt))),
+    ]);
+    revealLanded.current = null;
 
     const result: JourneyResult = {
       id: makeJourneyId(destination.id),
@@ -1411,23 +1468,6 @@ export function JourneyExperience() {
                   </motion.button>
                 </div>
 
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {[
-                    { label: "ひとり", value: 1 },
-                    { label: "カップル", value: 2 },
-                    { label: "家族・友達", value: 4 },
-                    { label: "グループ", value: 8 },
-                  ].map((preset) => (
-                    <button
-                      key={preset.value}
-                      type="button"
-                      onClick={() => setPeople(preset.value)}
-                      className={chipClass(people === preset.value)}
-                    >
-                      {preset.label}
-                    </button>
-                  ))}
-                </div>
               </div>
             </motion.div>
 
@@ -1768,7 +1808,22 @@ export function JourneyExperience() {
             <TabiMascot mood="thinking" size="small" />
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="mt-6 h-64 overflow-hidden rounded-2xl border border-[color:var(--line)] shadow-float sm:h-80">
+            <ShuffleMap
+              points={shufflePoints}
+              activeId={shuffleHover}
+              onHover={setShuffleHover}
+              onPick={(id) => {
+                const plan = shuffleOptions.find((p) => p.destination.id === id);
+                if (plan) chooseShuffleOption(plan);
+              }}
+            />
+          </div>
+          <p className="mt-2 text-center text-xs font-bold text-[color:var(--muted)]">
+            地図のピンをタップしても選べるよ
+          </p>
+
+          <div className="mt-6 grid gap-4 sm:grid-cols-2">
             {shuffleOptions.map((plan, index) => {
               const distanceKm = haversineDistanceKm(start, plan.destination);
               const difficulty = journeyDifficulty(distanceKm);
@@ -1777,6 +1832,8 @@ export function JourneyExperience() {
                   key={plan.destination.id}
                   type="button"
                   onClick={() => chooseShuffleOption(plan)}
+                  onMouseEnter={() => setShuffleHover(plan.destination.id)}
+                  onMouseLeave={() => setShuffleHover(null)}
                   initial={{ opacity: 0, y: 24, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: index * 0.08, type: "spring", stiffness: 260, damping: 22 }}
@@ -1802,6 +1859,13 @@ export function JourneyExperience() {
                       difficulty={difficulty}
                       className="absolute right-2 top-2 shadow-sm"
                     />
+                    <span
+                      className={`absolute left-2 top-2 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-vermilion text-sm font-black text-white shadow transition ${
+                        shuffleHover === plan.destination.id ? "scale-110" : ""
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
                   </div>
                   <div className="p-4">
                     <h3 className="text-sm font-black leading-snug">
@@ -1862,13 +1926,44 @@ export function JourneyExperience() {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="fixed inset-x-0 top-24 z-10 flex justify-center">
-            <TabiMascot mood="walking" size="small" />
-          </div>
-          <JourneySkeleton />
-          <p className="fixed inset-x-0 top-52 z-10 text-center text-sm font-bold text-vermilion">
-            タビが目的地と天気を調べています…
-          </p>
+          {revealTarget ? (
+            <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-3xl flex-col px-4 pb-10 pt-24 sm:px-6">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-vermilion">
+                    TABI&apos;S PICK / {revealTarget.prefecture}
+                  </p>
+                  <motion.h2
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 2.6 }}
+                    className="mt-1 truncate font-display text-3xl font-black sm:text-4xl"
+                  >
+                    {revealTarget.name}
+                  </motion.h2>
+                </div>
+                <TabiMascot mood="walking" size="small" />
+              </div>
+              <div className="mt-4 h-[56vh] min-h-72 w-full overflow-hidden rounded-2xl border border-[color:var(--line)] shadow-float">
+                <RevealMap
+                  latitude={revealTarget.latitude}
+                  longitude={revealTarget.longitude}
+                  name={revealTarget.name}
+                  onLanded={() => revealLanded.current?.()}
+                />
+              </div>
+              <p className="mt-3 text-center text-sm font-bold text-[color:var(--muted)]">
+                タビが目的地へ案内中… 天気と写真も集めています
+              </p>
+            </section>
+          ) : (
+            <>
+              <div className="fixed inset-x-0 top-24 z-10 flex justify-center">
+                <TabiMascot mood="walking" size="small" />
+              </div>
+              <JourneySkeleton />
+            </>
+          )}
         </motion.div>
       )}
 
@@ -2049,6 +2144,18 @@ export function JourneyExperience() {
                   </div>
                 )}
               </div>
+
+              {journey.destination.categories.includes("food") && (
+                <MenuCard
+                  key={`menu-${journey.destination.id}`}
+                  className="order-2 lg:order-none"
+                  name={journey.destination.name}
+                  prefecture={journey.prefecture.nameJa}
+                  latitude={journey.destination.latitude}
+                  longitude={journey.destination.longitude}
+                  aiEnabled={aiEnabled}
+                />
+              )}
 
               <FactsCard
                 key={`facts-${journey.destination.id}`}
@@ -2247,6 +2354,14 @@ export function JourneyExperience() {
                   </p>
                 </div>
               </div>
+
+              <PlaceRating
+                key={`rating-${journey.destination.id}`}
+                className="order-6 lg:order-none"
+                placeId={journey.destination.id}
+                name={journey.destination.name}
+                prefecture={journey.prefecture.nameJa}
+              />
 
               {authEnabled &&
                 (user ? (

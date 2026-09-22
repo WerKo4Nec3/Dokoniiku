@@ -2,20 +2,20 @@
 
 import { useEffect, useState } from "react";
 import {
+  Clock,
   ExternalLink,
   Lightbulb,
   MapPinned,
   Play,
   Sparkles,
+  UtensilsCrossed,
   Youtube,
 } from "lucide-react";
 import type { DestinationCategory } from "@/types";
 import { getDestinationFacts } from "@/lib/api/wikipedia";
-import {
-  getNearbyPlaces,
-  type NearbyCategory,
-  type NearbyGroup,
-} from "@/lib/api/nearby";
+import { type NearbyCategory, type NearbyGroup } from "@/lib/api/nearby";
+import { fetchAround } from "@/lib/api/around";
+import { type MenuInfo } from "@/lib/api/menu";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 
 type Video = { id: string; title: string; channel: string; thumb: string };
@@ -308,13 +308,13 @@ export function NearbyCard({
   useEffect(() => {
     let active = true;
     setGroups(null);
-    getNearbyPlaces(latitude, longitude)
-      .then((g) => active && setGroups(g))
+    fetchAround(latitude, longitude, placeName)
+      .then((r) => active && setGroups(r.groups))
       .catch(() => active && setGroups([]));
     return () => {
       active = false;
     };
-  }, [latitude, longitude]);
+  }, [latitude, longitude, placeName]);
 
   const mapsUrl = (term: string) =>
     `https://www.google.com/maps/search/${encodeURIComponent(
@@ -338,6 +338,9 @@ export function NearbyCard({
     if (onsen) steps.push({ time: "午後", emoji: "♨️", name: onsen.name, distanceM: onsen.distanceM });
     return steps.length >= 2 ? steps : [];
   })();
+
+  // Nothing around (or OSM unreachable): hide the block instead of an empty box.
+  if (groups !== null && groups.length === 0) return null;
 
   return (
     <div className={`${CARD} ${className}`}>
@@ -372,10 +375,6 @@ export function NearbyCard({
 
       {groups === null ? (
         <NearbySkeleton />
-      ) : groups.length === 0 ? (
-        <p className="mt-3 text-sm font-medium text-[color:var(--muted)]">
-          この場所の周辺情報は見つかりませんでした。
-        </p>
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
           {groups.map((group) => {
@@ -412,6 +411,199 @@ export function NearbyCard({
 
       <p className="mt-4 text-[10px] text-[color:var(--muted)]">
         データ: OpenStreetMap contributors
+      </p>
+    </div>
+  );
+}
+
+// ---- メニュー (food destinations) ----
+
+function MenuLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="inline-flex items-center gap-1 rounded-full border border-[color:var(--line)] px-3 py-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:border-vermilion/50 hover:text-[color:var(--foreground)]"
+    >
+      {children}
+      <ExternalLink size={11} />
+    </a>
+  );
+}
+
+export function MenuCard({
+  name,
+  prefecture,
+  latitude,
+  longitude,
+  aiEnabled,
+  className = "",
+}: {
+  name: string;
+  prefecture: string;
+  latitude: number;
+  longitude: number;
+  aiEnabled: boolean;
+  className?: string;
+}) {
+  const [info, setInfo] = useState<MenuInfo | null>(null);
+  const [aiMenu, setAiMenu] = useState<string[] | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    setInfo(null);
+    fetchAround(latitude, longitude, name).then(
+      (r) => active && setInfo(r.menu ?? { venue: null, eateries: [] }),
+    );
+    return () => {
+      active = false;
+    };
+  }, [name, latitude, longitude]);
+
+  async function askAiMenu() {
+    setAiLoading(true);
+    try {
+      const res = await fetch("/api/place-insight", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "menu", name, prefecture, categories: ["food"] }),
+      });
+      const data = await res.json();
+      const lines = String(data.text ?? "")
+        .split("\n")
+        .map((l: string) => l.replace(/^[・\-\s]+/, "").trim())
+        .filter(Boolean);
+      setAiMenu(lines.length ? lines : ["メニューを取得できませんでした。"]);
+    } catch {
+      setAiMenu(["メニューを取得できませんでした。"]);
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  const q = `${name} ${prefecture}`;
+  const venue = info?.venue ?? null;
+
+  return (
+    <div className={`${CARD} ${className}`}>
+      <h3 className="inline-flex items-center gap-2 text-sm font-black">
+        <UtensilsCrossed size={16} className="text-vermilion" />
+        メニュー
+      </h3>
+
+      {info === null && (
+        <div className="mt-3 h-16 animate-pulse rounded-lg bg-[color:var(--surface-muted)]" />
+      )}
+
+      {venue && (
+        <div className="mt-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
+          <p className="text-sm font-black">{venue.name}</p>
+          {venue.cuisine.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {venue.cuisine.map((c) => (
+                <span
+                  key={c}
+                  className="rounded-full bg-vermilion/10 px-2.5 py-0.5 text-[11px] font-bold text-vermilion"
+                >
+                  {c}
+                </span>
+              ))}
+            </div>
+          )}
+          {venue.openingHours && (
+            <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-[color:var(--muted)]">
+              <Clock size={13} className="mt-0.5 shrink-0" />
+              <span className="break-all">{venue.openingHours}</span>
+            </p>
+          )}
+          {(venue.menuUrl || venue.website) && (
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              {venue.menuUrl && (
+                <a
+                  href={venue.menuUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 rounded-full bg-vermilion px-3 py-1.5 text-xs font-black text-white transition hover:opacity-90"
+                >
+                  公式メニューを見る <ExternalLink size={11} />
+                </a>
+              )}
+              {venue.website && (
+                <MenuLink href={venue.website}>公式サイト</MenuLink>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {aiMenu && (
+        <ul className="mt-3 space-y-2">
+          {aiMenu.map((line, i) => (
+            <li key={i} className="flex items-start gap-2 text-sm font-medium leading-6">
+              <Sparkles size={15} className="mt-1 shrink-0 text-vermilion" />
+              <span>{line}</span>
+            </li>
+          ))}
+          <li className="text-[10px] text-[color:var(--muted)]">
+            AIによる推定です。実際のメニューはお店の情報を確認してね。
+          </li>
+        </ul>
+      )}
+
+      {aiEnabled && !aiMenu && (
+        <button
+          type="button"
+          onClick={askAiMenu}
+          disabled={aiLoading}
+          className="mt-3 inline-flex items-center gap-2 rounded-full bg-forest px-4 py-2 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-60"
+        >
+          <Sparkles size={14} />
+          {aiLoading ? "タビが調べています…" : "タビに名物メニューを聞く"}
+        </button>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2">
+        <MenuLink href={`https://www.google.com/search?q=${encodeURIComponent(`${q} site:tabelog.com`)}`}>
+          食べログで見る
+        </MenuLink>
+        <MenuLink href={`https://www.google.com/maps/search/${encodeURIComponent(q)}`}>
+          Googleマップ（メニュー・写真）
+        </MenuLink>
+        <MenuLink href={`https://www.google.com/search?tbm=isch&q=${encodeURIComponent(`${name} メニュー`)}`}>
+          メニューの写真
+        </MenuLink>
+      </div>
+
+      {info && info.eateries.length > 0 && (
+        <div className="mt-4 border-t border-[color:var(--line)] pt-3">
+          <p className="text-xs font-black text-[color:var(--muted)]">近くのお店</p>
+          <ul className="mt-2 space-y-1.5">
+            {info.eateries.map((e) => (
+              <li key={`${e.name}-${e.distanceM}`} className="flex items-center gap-2 text-sm">
+                <a
+                  href={e.website ?? `https://www.google.com/maps/search/${encodeURIComponent(`${e.name} ${prefecture}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate font-bold underline-offset-2 hover:underline"
+                >
+                  {e.name}
+                </a>
+                {e.cuisine[0] && (
+                  <span className="shrink-0 text-[11px] font-bold text-vermilion">{e.cuisine[0]}</span>
+                )}
+                <span className="shrink-0 text-[11px] text-[color:var(--muted)]">
+                  {formatDistance(e.distanceM)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-4 text-[10px] text-[color:var(--muted)]">
+        データ: OpenStreetMap ほか。営業時間・メニューは変わることがあります。
       </p>
     </div>
   );
