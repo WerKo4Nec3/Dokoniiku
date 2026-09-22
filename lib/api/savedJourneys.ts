@@ -13,6 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { fixJourneyPhotos } from "@/lib/photos";
 import type { JourneyResult, PlaceStatus, SavedJourney } from "@/types";
 
 const RECENT_MAX = 5;
@@ -35,7 +36,9 @@ export async function fetchUserJourneys(uid: string): Promise<SavedJourney[]> {
   const ref = journeysCollection(uid);
   if (!ref) return [];
   const snapshot = await getDocs(query(ref, orderBy("savedAt", "desc"), limit(100)));
-  return snapshot.docs.map((entry) => entry.data() as SavedJourney);
+  return snapshot.docs.map((entry) =>
+    fixJourneyPhotos(entry.data() as SavedJourney),
+  );
 }
 
 export async function deleteUserJourney(uid: string, id: string) {
@@ -87,7 +90,7 @@ export async function fetchRecentForUser(
   const snapshot = await getDoc(doc(db, "users", uid, "meta", "recent"));
   const data = snapshot.exists() ? snapshot.data() : null;
   return data && Array.isArray(data.items)
-    ? (data.items as JourneyResult[])
+    ? (data.items as JourneyResult[]).map(fixJourneyPhotos)
     : [];
 }
 

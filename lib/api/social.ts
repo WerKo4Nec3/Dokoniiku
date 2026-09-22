@@ -11,6 +11,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { fixJourneyPhotos } from "@/lib/photos";
 import type {
   FriendRequest,
   JourneyResult,
@@ -183,10 +184,10 @@ export async function listSharedInbox(uid: string): Promise<SharedCard[]> {
   const snapshot = await getDocs(
     query(collection(db, "sharedCards"), where("toUid", "==", uid)),
   );
-  return snapshot.docs.map((entry) => ({
-    id: entry.id,
-    ...(entry.data() as Omit<SharedCard, "id">),
-  }));
+  return snapshot.docs.map((entry) => {
+    const card = entry.data() as Omit<SharedCard, "id">;
+    return { id: entry.id, ...card, journey: fixJourneyPhotos(card.journey) };
+  });
 }
 
 export async function deleteSharedCard(id: string) {

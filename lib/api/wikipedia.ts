@@ -1,3 +1,4 @@
+import { normalizePhotoUrl } from "@/lib/photos";
 type WikipediaSummary = {
   extract?: string;
   thumbnail?: { source: string };
@@ -38,11 +39,14 @@ export async function getDestinationSummary(
 }
 
 // A protocol-relative Wikimedia thumbnail URL (//upload.wikimedia.org/…) with a
-// small width baked into the path. Bump it up so gallery images stay crisp.
+// small width baked into the path. Bump it to 960 — one of the few widths
+// Wikimedia will still render (800 etc. now return HTTP 400).
 function upscaleThumb(src: string): string {
   const absolute = src.startsWith("//") ? `https:${src}` : src;
-  return absolute.replace(/\/(\d+)px-/, (match, width) =>
-    Number(width) < 800 ? "/800px-" : match,
+  return normalizePhotoUrl(
+    absolute.replace(/\/(\d+)px-/, (match, width) =>
+      Number(width) < 960 ? "/960px-" : match,
+    ),
   );
 }
 
@@ -110,7 +114,7 @@ export async function searchCommonsPhotos(
       `?action=query&format=json&origin=*` +
       `&generator=search&gsrsearch=${encodeURIComponent(query)}` +
       `&gsrnamespace=6&gsrlimit=20` +
-      `&prop=imageinfo&iiprop=url&iiurlwidth=800`;
+      `&prop=imageinfo&iiprop=url&iiurlwidth=960`;
     const response = await fetch(url);
     if (!response.ok) return [];
     const data = (await response.json()) as {
@@ -151,7 +155,7 @@ export function mergePhotos(groups: string[][], limit = 12): string[] {
       const key = photoKey(url);
       if (seen.has(key)) continue;
       seen.add(key);
-      out.push(url);
+      out.push(normalizePhotoUrl(url));
       if (out.length >= limit) return out;
     }
   }
@@ -201,7 +205,7 @@ export async function getNearbyPhotos(
       `?action=query&format=json&origin=*` +
       `&generator=geosearch&ggscoord=${latitude}%7C${longitude}` +
       `&ggsradius=1500&ggslimit=20&ggsnamespace=6` +
-      `&prop=imageinfo&iiprop=url&iiurlwidth=800`;
+      `&prop=imageinfo&iiprop=url&iiurlwidth=960`;
     const response = await fetch(url);
     if (!response.ok) return [];
 

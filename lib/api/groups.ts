@@ -19,6 +19,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { fixJourneyPhotos } from "@/lib/photos";
 import type {
   Group,
   GroupCategory,
@@ -222,10 +223,10 @@ export function subscribeGroupEvents(
   );
   return onSnapshot(ref, (snapshot) => {
     onEvents(
-      snapshot.docs.map((entry) => ({
-        id: entry.id,
-        ...(entry.data() as Omit<GroupEvent, "id">),
-      })),
+      snapshot.docs.map((entry) => {
+        const event = entry.data() as Omit<GroupEvent, "id">;
+        return { id: entry.id, ...event, journey: fixJourneyPhotos(event.journey) };
+      }),
     );
   });
 }

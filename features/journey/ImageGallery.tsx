@@ -1,9 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { normalizePhotoUrl } from "@/lib/photos";
 
 // A hero image with a thumbnail strip underneath. Tapping a thumbnail swaps
-// the large image. Falls back to the brand backdrop when there are no photos.
+// the large image. Every photo is pre-checked: ones that fail to load (dead
+// link, hotlink block, rejected thumbnail size…) are dropped instead of
+// showing up as black tiles. Falls back to the brand backdrop when none work.
 export function ImageGallery({
   images,
   alt,
@@ -15,15 +18,45 @@ export function ImageGallery({
   className?: string;
   frameClass?: string;
 }) {
-  const gallery = images.length ? images : ["/travel-backdrop.jpg"];
-  const [active, setActive] = useState(0);
+  const sources = useMemo(
+    () => [...new Set(images.map((u) => normalizePhotoUrl(u)).filter(Boolean))],
+    [images],
+  );
+  const [failed, setFailed] = useState<Set<string>>(new Set());
+  const [activeSrc, setActiveSrc] = useState<string | null>(null);
 
-  // Reset to the first photo whenever the place (its image set) changes.
+  // New place → forget old failures/selection and probe the new set.
   useEffect(() => {
-    setActive(0);
-  }, [images]);
+    setFailed(new Set());
+    setActiveSrc(null);
+    let alive = true;
+    const probes = sources.map((src) => {
+      const img = new Image();
+      img.referrerPolicy = "no-referrer-when-downgrade";
+      img.onerror = () => {
+        if (!alive) return;
+        setFailed((prev) => {
+          if (prev.has(src)) return prev;
+          const next = new Set(prev);
+          next.add(src);
+          return next;
+        });
+      };
+      img.src = src;
+      return img;
+    });
+    return () => {
+      alive = false;
+      probes.forEach((img) => {
+        img.onerror = null;
+      });
+    };
+  }, [sources]);
 
-  const current = gallery[Math.min(active, gallery.length - 1)];
+  const usable = sources.filter((src) => !failed.has(src));
+  const gallery = usable.length ? usable : ["/travel-backdrop.jpg"];
+  const current =
+    activeSrc && gallery.includes(activeSrc) ? activeSrc : gallery[0];
 
   return (
     <div className={className}>
@@ -40,16 +73,16 @@ export function ImageGallery({
       </div>
 
       {gallery.length > 1 && (
-        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+        <div className="no-scrollbar mt-3 flex snap-x gap-2 overflow-x-auto pb-1">
           {gallery.map((src, index) => (
             <button
               key={src}
               type="button"
-              onClick={() => setActive(index)}
+              onClick={() => setActiveSrc(src)}
               aria-label={`${alt} 写真 ${index + 1}`}
-              aria-current={index === active}
-              className={`h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 bg-cover bg-center transition ${
-                index === active
+              aria-current={src === current}
+              className={`h-14 w-20 shrink-0 snap-start overflow-hidden rounded-md border-2 bg-[color:var(--surface-muted)] bg-cover bg-center transition ${
+                src === current
                   ? "border-vermilion opacity-100"
                   : "border-transparent opacity-70 hover:opacity-100"
               }`}
