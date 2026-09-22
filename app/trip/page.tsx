@@ -75,7 +75,7 @@ export default async function TripPage({ searchParams }: { searchParams: SP }) {
 
       <div className="mt-4 flex flex-wrap gap-2">
         {trip.t != null && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky/15 px-3 py-1.5 text-xs font-bold text-[#3f8ea0] dark:text-sky">
+          <span className="inline-flex items-center gap-1 rounded-full bg-sky/15 px-3 py-1.5 text-xs font-bold text-[#1b7182] dark:text-sky">
             🌤 {trip.t}℃{trip.w ? ` ・ ${trip.w}` : ""}
           </span>
         )}
@@ -87,7 +87,7 @@ export default async function TripPage({ searchParams }: { searchParams: SP }) {
         {trip.c.map((c) => (
           <span
             key={c}
-            className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+            className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
           >
             {categoryLabels[c as DestinationCategory] ?? c}
           </span>

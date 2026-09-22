@@ -122,7 +122,7 @@ export function FactsCard({
             >
               <Sparkles
                 size={16}
-                className="mt-1 shrink-0 text-forest dark:text-[#8fd0b9]"
+                className="mt-1 shrink-0 text-forest dark:text-forest-ink"
               />
               <span>{f}</span>
             </li>
@@ -345,7 +345,7 @@ export function NearbyCard({
   return (
     <div className={`${CARD} ${className}`}>
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
-        <MapPinned size={16} className="text-forest dark:text-[#8fd0b9]" />
+        <MapPinned size={16} className="text-forest dark:text-forest-ink" />
         周辺スポット
       </h3>
 

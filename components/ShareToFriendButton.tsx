@@ -58,7 +58,7 @@ export function ShareToFriendButton({
         aria-label="友達に共有"
         title="友達に共有"
         aria-expanded={open}
-        className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-forest/10 hover:text-forest dark:hover:text-[#8fd0b9]"
+        className="grid h-8 w-8 place-items-center rounded-full text-[color:var(--muted)] transition hover:bg-forest/10 hover:text-forest dark:hover:text-forest-ink"
       >
         <Send size={14} />
       </button>

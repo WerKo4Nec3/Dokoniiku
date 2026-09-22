@@ -82,7 +82,7 @@ export function ProfileGameStats({
             </p>
             {streak.best > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-2.5 py-1 text-[11px] font-black text-[#8a6a17] dark:text-sun">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-2.5 py-1 text-[11px] font-black text-[#816106] dark:text-sun">
                   🔥 {streak.current}週連続
                 </span>
                 <span className="text-[11px] font-bold text-[color:var(--muted)]">
@@ -135,7 +135,7 @@ export function ProfileGameStats({
             >
               <Icon
                 size={18}
-                className="mx-auto text-forest dark:text-[#8fd0b9]"
+                className="mx-auto text-forest dark:text-forest-ink"
               />
               <p className="mt-2 text-xl font-black tabular-nums">
                 {tile.value}

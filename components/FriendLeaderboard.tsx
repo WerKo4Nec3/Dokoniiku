@@ -35,7 +35,7 @@ export function FriendLeaderboard({
   return (
     <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:p-6">
       <h3 className="inline-flex items-center gap-2 text-sm font-black">
-        <Users size={16} className="text-forest dark:text-[#8fd0b9]" />
+        <Users size={16} className="text-forest dark:text-forest-ink" />
         仲間ランキング
       </h3>
 

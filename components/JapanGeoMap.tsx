@@ -267,7 +267,7 @@ export function JapanGeoMap({
                         transformBox: "fill-box",
                         transformOrigin: "center",
                         transform: "scale(1.06)",
-                        filter: "drop-shadow(0 4px 6px rgb(31 41 36 / 0.30))",
+                        filter: "drop-shadow(0 4px 6px rgb(30 27 21 / 0.30))",
                         transition: "transform 150ms ease",
                       }}
                     />
@@ -286,7 +286,7 @@ export function JapanGeoMap({
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.12 }}
                 style={{ left: tip.x, top: tip.y }}
-                className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+10px)] whitespace-nowrap rounded-full border border-[color:var(--line)] bg-[color:var(--surface)]/95 px-3 py-1.5 text-xs font-bold shadow-float backdrop-blur"
+                className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-[calc(100%+10px)] whitespace-nowrap rounded-full border border-[color:var(--line)] bg-[color:color-mix(in_srgb,var(--surface)_95%,transparent)] px-3 py-1.5 text-xs font-bold shadow-float backdrop-blur"
               >
                 {nameById.get(tip.id)}
                 <span className="ml-1.5 font-medium text-[color:var(--muted)]">
@@ -306,7 +306,7 @@ export function JapanGeoMap({
                 initial={{ opacity: 0, x: -8 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -8 }}
-                className="absolute left-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)]/95 px-3 py-1.5 text-xs font-bold shadow-float backdrop-blur transition hover:border-vermilion/50"
+                className="absolute left-3 top-3 z-20 inline-flex items-center gap-1.5 rounded-full border border-[color:var(--line)] bg-[color:color-mix(in_srgb,var(--surface)_95%,transparent)] px-3 py-1.5 text-xs font-bold shadow-float backdrop-blur transition hover:border-vermilion/50"
               >
                 <RotateCcw size={13} /> 全体表示
               </motion.button>
@@ -368,7 +368,7 @@ export function JapanGeoMap({
                                   className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                                 />
                               ) : (
-                                <span className="grid h-full w-full place-items-center text-forest/50">
+                                <span className="grid h-full w-full place-items-center text-forest-ink/50">
                                   <MapPin size={16} />
                                 </span>
                               )}
@@ -401,7 +401,7 @@ export function JapanGeoMap({
                 {tiers.map((tier) => (
                   <li key={tier.status} className="flex items-center gap-2">
                     <span
-                      className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[color:var(--foreground)]/50 text-xs font-black text-[#1f2924]"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[color:color-mix(in_srgb,var(--foreground)_50%,transparent)] text-xs font-black text-[#1e1b15]"
                       style={{ backgroundColor: tier.fill }}
                     >
                       {tier.score}
@@ -413,7 +413,7 @@ export function JapanGeoMap({
                   </li>
                 ))}
                 <li className="flex items-center gap-2">
-                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[color:var(--foreground)]/50 bg-[color:var(--surface-muted)] text-xs font-black">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full border-2 border-[color:color-mix(in_srgb,var(--foreground)_50%,transparent)] bg-[color:var(--surface-muted)] text-xs font-black">
                     0
                   </span>
                   <span className="text-xs font-bold">未踏</span>

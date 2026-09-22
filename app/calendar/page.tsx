@@ -215,7 +215,7 @@ export default function CalendarPage() {
                         }
                       >
                         {!journey.destination.imageUrl && (
-                          <span className="grid h-full w-full place-items-center text-forest/50">
+                          <span className="grid h-full w-full place-items-center text-forest-ink/50">
                             <MapPin size={16} />
                           </span>
                         )}
@@ -359,7 +359,7 @@ export default function CalendarPage() {
                         >
                           {!journey.destination.imageUrl && (
                             <span className="grid h-full w-full place-items-center text-[10px]">
-                              <MapPin size={12} className="text-forest/60" />
+                              <MapPin size={12} className="text-forest-ink/60" />
                             </span>
                           )}
                         </div>
@@ -423,7 +423,7 @@ export default function CalendarPage() {
                       }
                     >
                       {!journey.destination.imageUrl && (
-                        <span className="grid h-full w-full place-items-center text-forest/50">
+                        <span className="grid h-full w-full place-items-center text-forest-ink/50">
                           <MapPin size={22} />
                         </span>
                       )}

@@ -2,52 +2,159 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==================================================================
+   Neutrals: 伝統色 grounds. Light = washi paper + sumi ink, dark = ink night.
+   Every palette shares ONE OKLCH lightness ladder (light bg .965 / surface
+   .993 / surface-muted .932 / line .874 / fg .222 / muted .49; dark bg .183 /
+   surface .233 / surface-muted .279 / line .362 / fg .955 / muted .765).
+   Only hue + a whisper of chroma change, so contrast is identical per palette.
+   --brand-ink     text-safe accent (>= 7:1 on bg/surface/surface-muted).
+   --c-forest-ink  text-safe forest: = forest in light, light tint in dark
+                   (replaces every hard-coded dark:text-[#8fd0b9]).
+   Accents darkened in OKLCH L only (hue/chroma kept) so white button text
+   passes AA (>= 4.6:1). Originals noted inline.
+   ================================================================== */
 :root {
-  --background: #f7f4ed;
-  --surface: #fffdf8;
-  --surface-muted: #ece9df;
-  --foreground: #1f2924;
-  --muted: #69736d;
-  --line: #d9d8cf;
-  --brand: #e8583e;
-  --brand-ink: #8c2d20;
+  /* 朱 light: 生成り kinari paper · 墨 sumi ink */
+  --background: #f7f3ed;
+  --surface: #fefcfa;
+  --surface-muted: #ece8e1;
+  --foreground: #1e1b15;
+  --muted: #646058;
+  --line: #dad5cd;
+  --brand: #d14229;
+  --brand-ink: #961901;
   /* Accent palette (RGB triplets so Tailwind can apply /opacity). */
-  --c-vermilion: 232 88 62;
+  --c-vermilion: 209 66 41; /* was 232 88 62 (#e8583e) */
   --c-forest: 40 95 77;
+  --c-forest-ink: var(--c-forest);
+  --backdrop-glow: 0.07;
+  --shadow-float: rgb(30 27 21 / 0.12);
   color-scheme: light;
 }
 
 /* ---- Colour palettes (settings page). Default is the vermilion above. */
 :root[data-palette="ocean"] {
+  /* 海 light: 白藍 shiro-ai morning haze */
   --c-vermilion: 47 122 165;
   --c-forest: 31 95 107;
+  --background: #eef4f8;
+  --surface: #fbfdff;
+  --surface-muted: #e3eaee;
+  --foreground: #161c1f;
+  --muted: #5a6266;
+  --line: #cfd7db;
+  --brand: #2f7aa5;
+  --brand-ink: #025176;
 }
 
 :root[data-palette="sakura"] {
-  --c-vermilion: 214 87 127;
+  /* 桜 light: 桜色 sakura-iro petal paper */
+  --c-vermilion: 197 72 113; /* was 214 87 127 (#d6577f) */
   --c-forest: 122 74 94;
+  --background: #f9f1f3;
+  --surface: #fffcfc;
+  --surface-muted: #eee6e8;
+  --foreground: #20191a;
+  --muted: #675e5f;
+  --line: #dcd3d4;
+  --brand: #c54871;
+  --brand-ink: #931348;
 }
 
 :root[data-palette="matcha"] {
-  --c-vermilion: 93 138 60;
+  /* 抹茶 light: 鳥の子 torinoko straw paper (deliberately not green) */
+  --c-vermilion: 84 129 51; /* was 93 138 60 (#5d8a3c) */
   --c-forest: 47 93 70;
+  --background: #f6f3eb;
+  --surface: #fefdf9;
+  --surface-muted: #ebe8df;
+  --foreground: #1d1b13;
+  --muted: #646056;
+  --line: #d9d5cb;
+  --brand: #548133;
+  --brand-ink: #2d5601;
 }
 
 :root[data-palette="yoru"] {
-  --c-vermilion: 124 92 255;
+  /* 夜 light: 白藤 shira-fuji lavender mist */
+  --c-vermilion: 120 87 250; /* was 124 92 255 (#7c5cff) */
   --c-forest: 61 74 122;
+  --background: #f2f3fa;
+  --surface: #fcfcff;
+  --surface-muted: #e7e8f0;
+  --foreground: #1a1a21;
+  --muted: #5f5f69;
+  --line: #d4d4de;
+  --brand: #7857fa;
+  --brand-ink: #5422c9;
 }
 
 .dark {
-  --background: #17211d;
-  --surface: #202c27;
-  --surface-muted: #2b3832;
-  --foreground: #f3f1e9;
-  --muted: #adb8b1;
-  --line: #3d4a44;
-  --brand: #ff775e;
-  --brand-ink: #ffd7cf;
+  /* 朱 dark: 墨染 sumizome ink-night, warm charcoal */
+  --background: #151210;
+  --surface: #201d1b;
+  --surface-muted: #2b2826;
+  --foreground: #f1f0ef;
+  --muted: #b6b2af;
+  --line: #403d3b;
+  --brand: #d14229;
+  --brand-ink: #fe9984;
+  --c-forest-ink: 143 208 185;
+  --backdrop-glow: 0.12;
+  --shadow-float: rgb(0 0 0 / 0.45);
   color-scheme: dark;
+}
+
+/* Dark + palette. MUST be :root.dark[data-palette] (0,3,0): the light
+   palette blocks above are (0,2,0) and would otherwise beat .dark (0,1,0),
+   leaking light neutrals into dark mode. Do not shorten the selector. */
+:root.dark[data-palette="ocean"] {
+  /* 海 dark: 濃藍 koi-ai deep sea */
+  --background: #0b1319;
+  --surface: #161f25;
+  --surface-muted: #212a31;
+  --foreground: #ecf1f4;
+  --muted: #aab4bc;
+  --line: #353f46;
+  --brand-ink: #86bbdd;
+  --c-forest-ink: 141 197 208;
+}
+
+:root.dark[data-palette="sakura"] {
+  /* 桜 dark: 紫黒 shikoku dusky plum */
+  --background: #171013;
+  --surface: #231b1e;
+  --surface-muted: #2e2629;
+  --foreground: #f3eff0;
+  --muted: #b9b0b4;
+  --line: #433b3f;
+  --brand-ink: #f996b0;
+  --c-forest-ink: 223 173 192;
+}
+
+:root.dark[data-palette="matcha"] {
+  /* 抹茶 dark: 千歳茶 chitose-cha olive-black (not mint) */
+  --background: #12130e;
+  --surface: #1e1e1a;
+  --surface-muted: #292924;
+  --foreground: #f0f0ee;
+  --muted: #b3b3ae;
+  --line: #3e3e39;
+  --brand-ink: #9abe84;
+  --c-forest-ink: 160 196 166;
+}
+
+:root.dark[data-palette="yoru"] {
+  /* 夜 dark: 鉄紺 tetsukon night-train sky */
+  --background: #10111d;
+  --surface: #1b1c29;
+  --surface-muted: #262735;
+  --foreground: #eff0f6;
+  --muted: #afb1c1;
+  --line: #3b3c4b;
+  --brand-ink: #afaaff;
+  --c-forest-ink: 169 185 235;
 }
 
 * {
@@ -63,11 +170,16 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
+  /* One soft palette "lantern" glow at the top; follows --c-vermilion, so
+     夜 gets violet, 朱 a warm ember. Fixed px height = same on long pages. */
   background:
-    linear-gradient(rgba(40, 95, 77, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(40, 95, 77, 0.025) 1px, transparent 1px),
+    radial-gradient(
+        120% 560px at 50% -160px,
+        rgb(var(--c-vermilion) / var(--backdrop-glow)) 0%,
+        transparent 70%
+      )
+      no-repeat,
     var(--background);
-  background-size: 28px 28px;
   color: var(--foreground);
   font-family:
     var(--font-body), "Hiragino Sans", "Yu Gothic UI", "Yu Gothic",
@@ -97,7 +209,7 @@ a:focus-visible {
 
 ::selection {
   background: #f2c14e;
-  color: #1f2924;
+  color: #1e1b15;
 }
 
 .surface {
@@ -122,9 +234,9 @@ a:focus-visible {
   background-image:
     linear-gradient(
       90deg,
-      rgba(247, 244, 237, 0.98) 0%,
-      rgba(247, 244, 237, 0.92) 38%,
-      rgba(247, 244, 237, 0.15) 72%
+      color-mix(in srgb, var(--background) 98%, transparent) 0%,
+      color-mix(in srgb, var(--background) 92%, transparent) 38%,
+      color-mix(in srgb, var(--background) 15%, transparent) 72%
     ),
     url("/travel-backdrop.jpg");
   background-position: center;
@@ -135,24 +247,25 @@ a:focus-visible {
   background-image:
     linear-gradient(
       90deg,
-      rgba(23, 33, 29, 0.98) 0%,
-      rgba(23, 33, 29, 0.9) 42%,
-      rgba(23, 33, 29, 0.28) 76%
+      color-mix(in srgb, var(--background) 98%, transparent) 0%,
+      color-mix(in srgb, var(--background) 90%, transparent) 42%,
+      color-mix(in srgb, var(--background) 28%, transparent) 76%
     ),
     url("/travel-backdrop.jpg");
 }
 
-/* On phones the landscape photo scales up huge and blurs, so use a crisp
-   brand gradient instead — sharp at any resolution, no stretching. */
+/* Phones: crisp palette glow instead of the up-scaled photo (this used to be
+   a fixed pale-green wash). Both selectors are needed so the (0,2,0) .dark
+   rule above does not win on phones. */
 @media (max-width: 720px) {
   .hero-image {
     background-image:
       radial-gradient(
         130% 55% at 50% 16%,
-        rgba(143, 181, 155, 0.45) 0%,
-        rgba(247, 244, 237, 0) 62%
+        rgb(var(--c-vermilion) / 0.12) 0%,
+        transparent 62%
       ),
-      linear-gradient(180deg, #e7eee4 0%, #f3f0e7 52%, #f7f4ed 100%);
+      linear-gradient(180deg, var(--surface) 0%, var(--background) 60%);
     background-position: center;
   }
 
@@ -160,10 +273,10 @@ a:focus-visible {
     background-image:
       radial-gradient(
         130% 55% at 50% 16%,
-        rgba(46, 106, 74, 0.5) 0%,
-        rgba(23, 33, 29, 0) 62%
+        rgb(var(--c-vermilion) / 0.14) 0%,
+        transparent 62%
       ),
-      linear-gradient(180deg, #1c2b22 0%, #17231d 60%, #131c17 100%);
+      linear-gradient(180deg, var(--surface) 0%, var(--background) 60%);
   }
 }
 
@@ -264,7 +377,7 @@ a:focus-visible {
   border-radius: 999px;
   background: var(--surface);
   border: 3px solid rgb(var(--c-vermilion));
-  box-shadow: 0 2px 8px rgba(31, 41, 36, 0.18);
+  box-shadow: 0 2px 8px var(--shadow-float);
   transition: transform 0.12s ease;
 }
 .range-brand:hover::-webkit-slider-thumb {
@@ -290,7 +403,7 @@ a:focus-visible {
   border: 3px solid rgb(var(--c-vermilion));
   border-radius: 999px;
   background: var(--surface);
-  box-shadow: 0 2px 8px rgba(31, 41, 36, 0.18);
+  box-shadow: 0 2px 8px var(--shadow-float);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -331,7 +444,7 @@ a:focus-visible {
   width: 34px;
   height: 34px;
   border-radius: 9999px;
-  background: var(--pin, #e8583e);
+  background: var(--pin, #d14229);
   color: #fff;
   font-size: 15px;
   font-weight: 900;

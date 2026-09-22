@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "旅の精タビが、次の週末の行き先を選ぶ旅アプリ。",
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f4ed",
-    theme_color: "#285f4d",
+    background_color: "#f7f3ed",
+    theme_color: "#f7f3ed",
     lang: "ja",
     icons: [
       { src: "/icon-192.png", sizes: "192x192", type: "image/png", purpose: "any" },

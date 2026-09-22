@@ -3,6 +3,7 @@
 import { Check, Heart, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CabinetHeader } from "@/components/CabinetHeader";
+import { syncThemeColor } from "@/lib/themeColor";
 import { categoryLabels } from "@/lib/utils/travel";
 import {
   CATEGORY_EMOJI,
@@ -21,11 +22,11 @@ const palettes: {
   accent: string;
   secondary: string;
 }[] = [
-  { id: "default", nameJa: "朱", hint: "鳥居の朱色（標準）", accent: "#e8583e", secondary: "#285f4d" },
+  { id: "default", nameJa: "朱", hint: "鳥居の朱色（標準）", accent: "#d14229", secondary: "#285f4d" },
   { id: "ocean", nameJa: "海", hint: "瀬戸内の青", accent: "#2f7aa5", secondary: "#1f5f6b" },
-  { id: "sakura", nameJa: "桜", hint: "春の花見", accent: "#d6577f", secondary: "#7a4a5e" },
-  { id: "matcha", nameJa: "抹茶", hint: "京の茶屋", accent: "#5d8a3c", secondary: "#2f5d46" },
-  { id: "yoru", nameJa: "夜", hint: "夜行列車", accent: "#7c5cff", secondary: "#3d4a7a" },
+  { id: "sakura", nameJa: "桜", hint: "春の花見", accent: "#c54871", secondary: "#7a4a5e" },
+  { id: "matcha", nameJa: "抹茶", hint: "京の茶屋", accent: "#548133", secondary: "#2f5d46" },
+  { id: "yoru", nameJa: "夜", hint: "夜行列車", accent: "#7857fa", secondary: "#3d4a7a" },
 ];
 
 function currentTheme(): ThemeMode {
@@ -56,8 +57,9 @@ export default function SettingsPage() {
       localStorage.setItem("tabi-compass:theme", mode);
       document.documentElement.classList.toggle("dark", mode === "dark");
     }
-    // Keep the header's sun/moon icon in sync.
+    // Keep the header's sun/moon icon + the status bar in sync.
     window.dispatchEvent(new Event(THEME_EVENT));
+    syncThemeColor();
   }
 
   function applyPalette(id: string) {
@@ -69,6 +71,7 @@ export default function SettingsPage() {
       localStorage.setItem("tabi-compass:palette", id);
       document.documentElement.dataset.palette = id;
     }
+    syncThemeColor();
   }
 
   const themeOptions: { id: ThemeMode; labelJa: string; icon: typeof Sun }[] = [

@@ -39,8 +39,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f7f4ed" },
-    { media: "(prefers-color-scheme: dark)", color: "#17211d" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f3ed" },
+    { media: "(prefers-color-scheme: dark)", color: "#151210" },
   ],
 };
 
@@ -53,6 +53,15 @@ const themeScript = `
     if (palette && palette !== 'default') {
       document.documentElement.dataset.palette = palette;
     }
+    // Status bar follows palette + mode (mirror of lib/themeColor.ts).
+    var bg = {default:['#f7f3ed','#151210'],ocean:['#eef4f8','#0b1319'],sakura:['#f9f1f3','#171013'],matcha:['#f6f3eb','#12130e'],yoru:['#f2f3fa','#10111d']};
+    var pair = bg[palette || 'default'] || bg['default'];
+    var sync = function () {
+      var c = document.documentElement.classList.contains('dark') ? pair[1] : pair[0];
+      document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) { m.setAttribute('content', c); });
+    };
+    sync();
+    document.addEventListener('DOMContentLoaded', sync);
   } catch {}
 `;
 

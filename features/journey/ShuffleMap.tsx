@@ -9,7 +9,7 @@ import {
   JAPAN_CENTER,
   accentColor,
   basemapUrl,
-} from "./RevealMap";
+} from "./mapTheme";
 
 export type ShufflePoint = {
   id: string;

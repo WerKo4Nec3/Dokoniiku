@@ -10,9 +10,9 @@ type Accent = "vermilion" | "forest" | "sun" | "sky";
 
 const accentText: Record<Accent, string> = {
   vermilion: "text-vermilion",
-  forest: "text-forest dark:text-[#8fd0b9]",
-  sun: "text-[#b98a12] dark:text-sun",
-  sky: "text-[#3f8ea0] dark:text-sky",
+  forest: "text-forest dark:text-forest-ink",
+  sun: "text-[#8c6702] dark:text-sun",
+  sky: "text-[#1b7182] dark:text-sky",
 };
 const accentBar: Record<Accent, string> = {
   vermilion: "bg-vermilion",

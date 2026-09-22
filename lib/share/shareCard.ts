@@ -40,7 +40,7 @@ export async function buildShareCard(
   const ctx = canvas.getContext("2d");
   if (!ctx) return null;
 
-  ctx.fillStyle = "#17271d";
+  ctx.fillStyle = "#151210";
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
   // Wikipedia images allow CORS; fall back to the local backdrop.
@@ -52,9 +52,9 @@ export async function buildShareCard(
 
   // Darken the lower half so the text reads over any photo.
   const gradient = ctx.createLinearGradient(0, HEIGHT * 0.2, 0, HEIGHT);
-  gradient.addColorStop(0, "rgba(10, 20, 14, 0)");
-  gradient.addColorStop(0.65, "rgba(10, 20, 14, 0.55)");
-  gradient.addColorStop(1, "rgba(10, 20, 14, 0.92)");
+  gradient.addColorStop(0, "rgba(21, 18, 16, 0)");
+  gradient.addColorStop(0.65, "rgba(21, 18, 16, 0.55)");
+  gradient.addColorStop(1, "rgba(21, 18, 16, 0.92)");
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, WIDTH, HEIGHT);
 
@@ -81,7 +81,7 @@ export async function buildShareCard(
   ctx.fillText(journey.destination.name, 60, HEIGHT - 168);
 
   ctx.font = `bold 28px ${FONT}`;
-  ctx.fillStyle = "#e4ebe4";
+  ctx.fillStyle = "#f1f0ef";
   ctx.fillText(
     `${journey.prefecture.nameJa} ・ ${journey.start.name}から約${journey.distanceKm}km ・ ${transportLabel(journey.transport, journey.transfer)}で${formatMinutes(journey.estimatedTravelTime)}`,
     60,
@@ -94,7 +94,7 @@ export async function buildShareCard(
   ctx.fillText("Dokoniiku", 60, HEIGHT - 46);
   const brandWidth = ctx.measureText("Dokoniiku").width;
   ctx.font = `600 22px ${FONT}`;
-  ctx.fillStyle = "#c3cec4";
+  ctx.fillStyle = "#b6b2af";
   ctx.fillText("dokoniiku.com", 60 + brandWidth + 24, HEIGHT - 46);
 
   return new Promise((resolve) =>

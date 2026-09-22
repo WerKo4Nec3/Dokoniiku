@@ -315,7 +315,7 @@ export default function GroupPage({
                 <span
                   className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     isPublic
-                      ? "bg-sky/15 text-[#3f8ea0] dark:text-sky"
+                      ? "bg-sky/15 text-[#1b7182] dark:text-sky"
                       : "bg-[color:var(--surface-muted)] text-[color:var(--muted)]"
                   }`}
                 >
@@ -378,7 +378,7 @@ export default function GroupPage({
                     )}
                   </p>
                   {isPublic && (
-                    <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sky/10 px-3 py-1 text-[11px] font-bold text-[#3f8ea0] dark:text-sky">
+                    <p className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-sky/10 px-3 py-1 text-[11px] font-bold text-[#1b7182] dark:text-sky">
                       <Globe size={11} /> 誰でも参加できます
                     </p>
                   )}
@@ -538,7 +538,7 @@ export default function GroupPage({
                               }
                             >
                               {!item.journey.destination.imageUrl && (
-                                <span className="grid h-full w-full place-items-center text-forest/50">
+                                <span className="grid h-full w-full place-items-center text-forest-ink/50">
                                   <MapPin size={18} />
                                 </span>
                               )}
@@ -568,7 +568,7 @@ export default function GroupPage({
                                 }
                                 className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-[11px] font-black transition ${
                                   joined
-                                    ? "bg-forest/10 text-forest dark:text-[#8fd0b9]"
+                                    ? "bg-forest/10 text-forest dark:text-forest-ink"
                                     : "bg-vermilion text-white hover:opacity-90"
                                 }`}
                               >

@@ -3,10 +3,10 @@ import { difficultyInfo } from "@/lib/utils/travel";
 
 // Colour token per tier. Legendary uses the animated gold class from globals.
 const tierClass: Record<Difficulty, string> = {
-  easy: "bg-forest/10 text-forest dark:bg-[#8fd0b9]/12 dark:text-[#8fd0b9]",
-  medium: "bg-[#75b9c8]/18 text-[#2c7c8d] dark:text-[#8fd6e4]",
+  easy: "bg-forest/10 text-forest dark:bg-forest-ink/12 dark:text-forest-ink",
+  medium: "bg-[#75b9c8]/18 text-[#1b6f80] dark:text-[#8fd6e4]",
   hard: "bg-[#7c5cff]/14 text-[#6446c8] dark:text-[#b7a3ff]",
-  epic: "bg-[#e8863e]/16 text-[#b45f1c] dark:text-[#f2ab63]",
+  epic: "bg-[#e8863e]/16 text-[#9f4f04] dark:text-[#f2ab63]",
   legendary: "difficulty-legendary",
 };
 

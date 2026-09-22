@@ -54,7 +54,7 @@ export function PlannedWeatherBadge({
   if (!inRange || !weather) return null;
 
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-sky/10 px-2 py-0.5 text-[11px] font-bold text-[#3f8ea0] dark:text-sky">
+    <span className="inline-flex items-center gap-1 rounded-full bg-sky/10 px-2 py-0.5 text-[11px] font-bold text-[#1b7182] dark:text-sky">
       <span aria-hidden>{ICON_EMOJI[weather.icon]}</span>
       {weather.temperature}°
       {weather.precipitation != null && weather.precipitation >= 30 && (

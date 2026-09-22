@@ -66,7 +66,7 @@ export function PlaceRating({
     `inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-black transition disabled:opacity-60 ${
       active
         ? tone === "up"
-          ? "border-forest bg-forest/10 text-forest dark:border-[#8fd0b9] dark:text-[#8fd0b9]"
+          ? "border-forest bg-forest/10 text-forest dark:border-forest-ink dark:text-forest-ink"
           : "border-vermilion bg-vermilion/10 text-vermilion"
         : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
     }`;
@@ -104,12 +104,12 @@ export function PlaceRating({
         </p>
       )}
       {mine !== -1 && isExcluded(up, down) && (
-        <p className="mt-2.5 text-[11px] font-medium text-vermilion">
+        <p className="mt-2.5 text-[11px] font-medium text-[color:var(--brand-ink)]">
           みんなの評価が低いため、通常は抽選から外れている場所です。
         </p>
       )}
       {error && (
-        <p className="mt-2.5 text-[11px] font-medium text-vermilion">
+        <p className="mt-2.5 text-[11px] font-medium text-[color:var(--brand-ink)]">
           評価を保存できませんでした。少し時間をおいて試してね。
         </p>
       )}

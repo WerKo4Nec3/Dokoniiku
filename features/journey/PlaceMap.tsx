@@ -1,7 +1,9 @@
 "use client";
 
 import "leaflet/dist/leaflet.css";
+import { useState } from "react";
 import { CircleMarker, MapContainer, TileLayer, Tooltip } from "react-leaflet";
+import { accentColor } from "./mapTheme";
 
 // Interactive OpenStreetMap tile map. Unlike the static export embed, this
 // gives working zoom-in AND zoom-out plus panning. A CircleMarker is used
@@ -16,6 +18,7 @@ export default function PlaceMap({
   longitude: number;
   name: string;
 }) {
+  const [accent] = useState(accentColor);
   return (
     <MapContainer
       center={[latitude, longitude]}
@@ -36,7 +39,7 @@ export default function PlaceMap({
         pathOptions={{
           color: "#ffffff",
           weight: 2,
-          fillColor: "#e14b32",
+          fillColor: accent,
           fillOpacity: 1,
         }}
       >

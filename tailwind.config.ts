@@ -6,6 +6,7 @@ const config: Config = {
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./features/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -19,17 +20,20 @@ const config: Config = {
         ],
       },
       colors: {
-        ink: "#1f2924",
-        paper: "#f7f4ed",
+        ink: "#1e1b15",
+        paper: "#f7f3ed",
         // Accent colours come from CSS variables so the settings page can
         // swap palettes at runtime (see globals.css [data-palette=…]).
         vermilion: "rgb(var(--c-vermilion) / <alpha-value>)",
         forest: "rgb(var(--c-forest) / <alpha-value>)",
+        // Text-safe forest: equals forest in light mode, a light tint in dark
+        // mode (per palette) — use instead of hard-coded mint.
+        "forest-ink": "rgb(var(--c-forest-ink) / <alpha-value>)",
         sky: "#75b9c8",
         sun: "#f2c14e",
       },
       boxShadow: {
-        float: "0 18px 60px rgba(31, 41, 36, 0.12)",
+        float: "0 18px 60px var(--shadow-float)",
       },
     },
   },

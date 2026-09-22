@@ -37,7 +37,7 @@ export function GroupCard({
           <span
             className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
               group.visibility === "public"
-                ? "bg-sky/15 text-[#3f8ea0] dark:text-sky"
+                ? "bg-sky/15 text-[#1b7182] dark:text-sky"
                 : "bg-[color:var(--surface-muted)] text-[color:var(--muted)]"
             }`}
           >

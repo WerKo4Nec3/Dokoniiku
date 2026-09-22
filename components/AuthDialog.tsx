@@ -135,7 +135,7 @@ export function AuthDialog() {
               className="relative w-full max-w-sm overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float"
             >
               {/* Warm header band with the mascot welcoming the traveller. */}
-              <div className="relative bg-gradient-to-b from-forest/15 via-forest/5 to-transparent px-6 pt-6 text-center dark:from-[#8fd0b9]/10 dark:via-[#8fd0b9]/5">
+              <div className="relative bg-gradient-to-b from-forest/15 via-forest/5 to-transparent px-6 pt-6 text-center dark:from-forest-ink/10 dark:via-forest-ink/5">
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -238,7 +238,7 @@ export function AuthDialog() {
                     <motion.p
                       initial={{ opacity: 0, y: -4 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="rounded-lg bg-vermilion/10 px-3 py-2 text-xs font-bold text-vermilion"
+                      className="rounded-lg bg-vermilion/10 px-3 py-2 text-xs font-bold text-[color:var(--brand-ink)]"
                     >
                       {error}
                     </motion.p>

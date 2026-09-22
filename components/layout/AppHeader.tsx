@@ -13,9 +13,10 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { openAuthDialog } from "@/components/AuthDialog";
+import { syncThemeColor } from "@/lib/themeColor";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -37,11 +38,17 @@ export function AppHeader() {
   const { enabled, loading, user, signOutUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
 
+  // Next can add theme-color tags after hydration; align them all once mounted.
+  useEffect(() => {
+    syncThemeColor();
+  }, []);
+
   function toggleTheme() {
     const next = !isDark;
     document.documentElement.classList.toggle("dark", next);
     localStorage.setItem("tabi-compass:theme", next ? "dark" : "light");
     window.dispatchEvent(new Event(THEME_EVENT));
+    syncThemeColor();
   }
 
   async function handleSignOut() {
@@ -50,7 +57,7 @@ export function AppHeader() {
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[1000] border-b border-black/5 bg-[color:var(--background)]/88 backdrop-blur-xl dark:border-white/10">
+    <header className="fixed inset-x-0 top-0 z-[1000] border-b border-black/5 bg-[color:color-mix(in_srgb,var(--background)_88%,transparent)] backdrop-blur-xl dark:border-white/10">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link
           href="/"

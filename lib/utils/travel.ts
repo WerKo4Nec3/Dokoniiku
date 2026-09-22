@@ -318,7 +318,7 @@ export const placeStatusInfo: Record<
   planned: {
     labelJa: "計画中",
     emoji: "💭",
-    className: "bg-[#75b9c8]/18 text-[#2c7c8d] dark:text-[#8fd6e4]",
+    className: "bg-[#75b9c8]/18 text-[#1b6f80] dark:text-[#8fd6e4]",
   },
   going: {
     labelJa: "行く予定",
@@ -328,12 +328,12 @@ export const placeStatusInfo: Record<
   enroute: {
     labelJa: "移動中",
     emoji: "🧭",
-    className: "bg-[#e8863e]/16 text-[#b45f1c] dark:text-[#f2ab63]",
+    className: "bg-[#e8863e]/16 text-[#9f4f04] dark:text-[#f2ab63]",
   },
   exploring: {
     labelJa: "探索中",
     emoji: "🔍",
-    className: "bg-sun/25 text-[#8a6a17] dark:text-sun",
+    className: "bg-sun/25 text-[#816106] dark:text-sun",
   },
   done: {
     labelJa: "完了",

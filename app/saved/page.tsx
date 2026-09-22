@@ -320,7 +320,7 @@ export default function SavedPage() {
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-forest/50 dark:text-[#8fd0b9]/50">
+                      <div className="grid h-full w-full place-items-center text-forest-ink/50 dark:text-forest-ink/50">
                         <MapPin size={30} />
                       </div>
                     )}
@@ -397,7 +397,7 @@ export default function SavedPage() {
                         .map((category) => (
                           <span
                             key={category}
-                            className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                            className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
                           >
                             {categoryLabels[category]}
                           </span>
@@ -426,7 +426,7 @@ export default function SavedPage() {
                       target="_blank"
                       rel="noreferrer"
                       onClick={(event) => event.stopPropagation()}
-                      className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-forest transition hover:opacity-80 dark:text-[#8fd0b9]"
+                      className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-forest transition hover:opacity-80 dark:text-forest-ink"
                     >
                       Google Mapsで見る
                       <ExternalLink size={13} />

@@ -37,7 +37,7 @@ export function GET(req: Request) {
           justifyContent: "space-between",
           padding: "72px",
           background:
-            "linear-gradient(135deg, #17211d 0%, #24463a 55%, #7a2e22 100%)",
+            "linear-gradient(135deg, #151210 0%, #2b201c 55%, #7a2e22 100%)",
           color: "#ffffff",
           fontFamily: "sans-serif",
         }}
@@ -47,7 +47,7 @@ export function GET(req: Request) {
         </div>
 
         <div style={{ display: "flex", flexDirection: "column" }}>
-          <div style={{ display: "flex", fontSize: 40, fontWeight: 700, color: "#bfe7d8" }}>
+          <div style={{ display: "flex", fontSize: 40, fontWeight: 700, color: "#fff1cf" }}>
             {pref}
           </div>
           <div style={{ display: "flex", fontSize: 92, fontWeight: 900, lineHeight: 1.1, marginTop: 8 }}>

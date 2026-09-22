@@ -125,7 +125,7 @@ export function FriendsPanel({
           {
             width: 480,
             margin: 1,
-            color: { dark: "#1f2924", light: "#fffdf8" },
+            color: { dark: "#1e1b15", light: "#fefcfa" },
           },
         ),
       )

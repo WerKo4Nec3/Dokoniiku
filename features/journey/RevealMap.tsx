@@ -14,26 +14,14 @@ import {
 // place the randomizer just picked, landing with a pulsing pin + its name.
 // Non-interactive on purpose — it's a moment, not a tool.
 
-export const JAPAN_CENTER: [number, number] = [36.6, 137.8];
+import {
+  accentColor,
+  BASEMAP_ATTRIBUTION,
+  basemapUrl,
+  JAPAN_CENTER,
+} from "./mapTheme";
+
 const JAPAN_ZOOM = 5;
-
-// Keyless OSM tiles (CARTO now needs an API key). Dark mode darkens them with
-// a CSS filter on the tile pane (see globals.css), so one URL serves both.
-export function basemapUrl() {
-  return "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-}
-// The palette accent as a literal colour (SVG attributes can't resolve var()).
-export function accentColor(): string {
-  if (typeof document === "undefined") return "#e8583e";
-  const raw = getComputedStyle(document.documentElement)
-    .getPropertyValue("--c-vermilion")
-    .trim();
-  const parts = raw.split(/[\s,]+/).filter(Boolean);
-  return parts.length === 3 ? `rgb(${parts.join(",")})` : "#e8583e";
-}
-
-export const BASEMAP_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 
 function Flight({
   lat,

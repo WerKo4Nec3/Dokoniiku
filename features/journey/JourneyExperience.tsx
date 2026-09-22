@@ -1311,7 +1311,7 @@ export function JourneyExperience() {
             </motion.div>
             <motion.div
               variants={fadeUp}
-              className="mb-4 flex items-center justify-center gap-2 text-sm font-bold text-forest dark:text-[#8fd0b9]"
+              className="mb-4 flex items-center justify-center gap-2 text-sm font-bold text-forest dark:text-forest-ink"
             >
               <span className="h-px w-8 bg-current" />
               WEEKEND TRIP SELECTOR
@@ -1373,13 +1373,13 @@ export function JourneyExperience() {
                     type="button"
                     onClick={useCurrentLocation}
                     disabled={locating}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-bold text-forest transition hover:bg-forest/15 disabled:opacity-60 dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-bold text-forest transition hover:bg-forest/15 disabled:opacity-60 dark:bg-forest-ink/10 dark:text-forest-ink"
                   >
                     <LocateFixed size={16} />
                     {locating ? "現在地を取得中…" : "現在地を使う"}
                   </button>
                   {locationError && (
-                    <p className="mt-2 text-xs font-medium text-vermilion">
+                    <p className="mt-2 text-xs font-medium text-[color:var(--brand-ink)]">
                       {locationError}
                     </p>
                   )}
@@ -1851,7 +1851,7 @@ export function JourneyExperience() {
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-forest/50 dark:text-[#8fd0b9]/50">
+                      <div className="grid h-full w-full place-items-center text-forest-ink/50 dark:text-forest-ink/50">
                         <MapPin size={32} />
                       </div>
                     )}
@@ -1882,7 +1882,7 @@ export function JourneyExperience() {
                       {plan.destination.categories.slice(0, 2).map((category) => (
                         <span
                           key={category}
-                          className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                          className="rounded-full bg-forest/10 px-2.5 py-1 text-[11px] font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
                         >
                           {categoryLabels[category]}
                         </span>
@@ -1995,7 +1995,7 @@ export function JourneyExperience() {
                 )}
               />
               {isSeasonalMatch(journey.destination.categories) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#8a6a17] dark:text-sun">
+                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#816106] dark:text-sun">
                   {seasonInfo[CURRENT_SEASON].emoji}{" "}
                   {seasonInfo[CURRENT_SEASON].labelJa}のおすすめ
                 </span>
@@ -2007,7 +2007,7 @@ export function JourneyExperience() {
               {journey.destination.categories.map((category) => (
                 <span
                   key={category}
-                  className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]"
+                  className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
                 >
                   {categoryLabels[category]}
                 </span>
@@ -2096,7 +2096,7 @@ export function JourneyExperience() {
                           type="button"
                           onClick={handleAskPlan}
                           disabled={aiPlanLoading}
-                          className="inline-flex items-center gap-2 rounded-full border border-forest px-4 py-2 text-xs font-bold text-forest transition hover:bg-forest/10 disabled:opacity-60 dark:border-[#8fd0b9] dark:text-[#8fd0b9]"
+                          className="inline-flex items-center gap-2 rounded-full border border-forest px-4 py-2 text-xs font-bold text-forest transition hover:bg-forest/10 disabled:opacity-60 dark:border-forest-ink dark:text-forest-ink"
                         >
                           <Ticket size={14} />
                           {aiPlanLoading ? "プランを考え中…" : "1日プランを作ってもらう"}
@@ -2107,7 +2107,7 @@ export function JourneyExperience() {
                       <div className="mt-3 flex items-start gap-2">
                         <Sparkles
                           size={16}
-                          className="mt-0.5 shrink-0 text-forest dark:text-[#8fd0b9]"
+                          className="mt-0.5 shrink-0 text-forest dark:text-forest-ink"
                         />
                         <div>
                           <p className="text-xs font-bold text-[color:var(--muted)]">
@@ -2126,7 +2126,7 @@ export function JourneyExperience() {
                       <div className="mt-3 flex items-start gap-2">
                         <Ticket
                           size={16}
-                          className="mt-0.5 shrink-0 text-forest dark:text-[#8fd0b9]"
+                          className="mt-0.5 shrink-0 text-forest dark:text-forest-ink"
                         />
                         <div>
                           <p className="text-xs font-bold text-[color:var(--muted)]">
@@ -2203,7 +2203,7 @@ export function JourneyExperience() {
 
               <div className="order-12 flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
                 <div className="flex items-center gap-3">
-                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-forest/10 text-forest dark:bg-[#8fd0b9]/10 dark:text-[#8fd0b9]">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-forest/10 text-forest dark:bg-forest-ink/10 dark:text-forest-ink">
                     <MapPin size={20} />
                   </span>
                   <div>
@@ -2272,7 +2272,7 @@ export function JourneyExperience() {
                 <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                   <TransportIcon
                     mode={journey.transport}
-                    className="text-forest dark:text-[#8fd0b9]"
+                    className="text-forest dark:text-forest-ink"
                   />
                   <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
                     片道の所要時間
@@ -2346,7 +2346,7 @@ export function JourneyExperience() {
               <div className="order-6 flex items-start gap-3 rounded-lg bg-forest p-5 text-white lg:order-none">
                 <TabiMascot mood="excited" size="small" />
                 <div className="pt-3">
-                  <p className="text-xs font-bold text-[#bfe7d8]">
+                  <p className="text-xs font-bold text-white/80">
                     タビのおすすめ理由
                   </p>
                   <p className="mt-2 text-sm font-bold leading-6">
