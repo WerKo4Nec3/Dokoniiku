@@ -18,6 +18,7 @@ import {
   type User,
 } from "firebase/auth";
 import { auth, firebaseEnabled, googleProvider } from "@/lib/firebase";
+import { touchUser } from "@/lib/analytics";
 
 type AuthState = {
   user: User | null;
@@ -47,6 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return onAuthStateChanged(auth, (nextUser) => {
       setUser(nextUser);
       setLoading(false);
+      if (nextUser) void touchUser(nextUser);
     });
   }, []);
 

@@ -67,6 +67,8 @@ export type WeatherInfo = {
   low?: number;
   precipitation?: number; // max chance of precipitation, %
   forDate?: string; // "YYYY-MM-DD" the forecast is for
+  sunrise?: string; // "5:58" local time
+  sunset?: string; // "17:12" local time
 };
 
 export type EstimatedBudget = {

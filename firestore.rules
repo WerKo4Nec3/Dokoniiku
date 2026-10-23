@@ -8,6 +8,16 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // Admins are listed by uid in /admins (create the doc by hand in the
+    // Firebase Console — no client can write there).
+    function isAdmin() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isDay(v) {
+      return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+    }
+
     // ---- Private per-user data: journeys, recent history, tabibito profile.
     match /users/{uid}/{document=**} {
       allow read, write: if signedIn() && request.auth.uid == uid;
@@ -64,6 +74,7 @@ service cloud.firestore {
       allow read: if signedIn() && (
         request.auth.uid in resource.data.members
         || resource.data.visibility == "public"
+        || isAdmin()
       );
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
@@ -167,6 +178,11 @@ service cloud.firestore {
             && request.resource.data.down == resource.data.down - 1)
         );
 
+      // Admin override: put a disliked place back into the randomizer.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["whitelisted"])
+        && request.resource.data.whitelisted is bool;
+
       match /votes/{uid} {
         // A vote may only change together with the counters (same transaction).
         function counterWrittenNow() {
@@ -186,6 +202,62 @@ service cloud.firestore {
           && request.resource.data.updatedAt == request.time
           && counterWrittenNow();
       }
+    }
+
+    // ---- Admin + first-party analytics (counters only, +1 steps) ----
+    match /admins/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // One doc per user: first/last day seen (user totals + daily actives).
+    match /userIndex/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || isAdmin());
+      allow list: if isAdmin();
+      allow create: if signedIn() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(["firstSeen", "lastSeen"])
+        && isDay(request.resource.data.firstSeen)
+        && isDay(request.resource.data.lastSeen);
+      allow update: if signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["lastSeen"])
+        && isDay(request.resource.data.lastSeen);
+    }
+
+    // Daily counters. Anyone (even signed-out visitors) may add exactly +1.
+    match /stats_daily/{day} {
+      function now(f) { return request.resource.data.get(f, 0); }
+      function was(f) { return resource.data.get(f, 0); }
+      function step(f) { return now(f) == was(f) || now(f) == was(f) + 1; }
+      function fresh(f) { return now(f) == 0 || now(f) == 1; }
+
+      allow read: if isAdmin();
+      allow create: if isDay(day)
+        && request.resource.data.keys().hasOnly(["date", "visitors", "sessions", "searches", "saves", "signups"])
+        && request.resource.data.date == day
+        && fresh("visitors") && fresh("sessions") && fresh("searches")
+        && fresh("saves") && fresh("signups");
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(["visitors", "sessions", "searches", "saves", "signups"])
+        && step("visitors") && step("sessions") && step("searches")
+        && step("saves") && step("signups");
+    }
+
+    // All-time searches per prefecture / per genre.
+    match /stats_prefs/{id} {
+      allow read: if isAdmin();
+      allow create: if id in ["hokkaido", "aomori", "iwate", "miyagi", "akita", "yamagata", "fukushima", "ibaraki", "tochigi", "gunma", "saitama", "chiba", "tokyo", "kanagawa", "niigata", "yamanashi", "nagano", "toyama", "ishikawa", "fukui", "gifu", "shizuoka", "aichi", "mie", "shiga", "kyoto", "osaka", "hyogo", "nara", "wakayama", "tottori", "shimane", "okayama", "hiroshima", "yamaguchi", "tokushima", "kagawa", "ehime", "kochi", "fukuoka", "saga", "nagasaki", "kumamoto", "oita", "miyazaki", "kagoshima", "okinawa"]
+        && request.resource.data.keys().hasOnly(["n"])
+        && request.resource.data.n == 1;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(["n"])
+        && request.resource.data.n == resource.data.n + 1;
+    }
+    match /stats_cats/{id} {
+      allow read: if isAdmin();
+      allow create: if id in ["nature", "history", "shrine", "museum", "hot-spring", "food", "viewpoint"]
+        && request.resource.data.keys().hasOnly(["n"])
+        && request.resource.data.n == 1;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(["n"])
+        && request.resource.data.n == resource.data.n + 1;
     }
 
     // ---- Cards shared between friends. `friendshipId` must point at an

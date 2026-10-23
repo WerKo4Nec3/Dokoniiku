@@ -350,3 +350,63 @@ export function computeAchievements(journeys: SavedJourney[]): Achievement[] {
 
   return defs.map((d) => ({ ...d, earned: d.current >= d.target }));
 }
+
+// ---- Year recap (「旅の年間まとめ」) ----
+
+export type YearRecap = {
+  year: number;
+  places: number; // completed this year
+  saved: number; // saved/planned this year, any status
+  prefectures: number;
+  regions: number;
+  km: number;
+  spentYen: number;
+  topCategory: DestinationCategory | null;
+  topCategoryCount: number;
+  farthest: { name: string; prefecture: string; km: number } | null;
+  busiestMonth: number | null; // 1-12
+};
+
+function yearOf(journey: SavedJourney): number | null {
+  const iso = journey.plannedDate ?? journey.createdAt;
+  const y = iso ? Number(iso.slice(0, 4)) : NaN;
+  return Number.isFinite(y) ? y : null;
+}
+
+export function computeYearRecap(journeys: SavedJourney[], year: number): YearRecap {
+  const inYear = journeys.filter((j) => yearOf(j) === year);
+  const done = inYear.filter((j) => statusOf(j) === "done");
+  const prefs = new Set(done.map((j) => j.prefecture.id));
+  const regions = new Set(done.map((j) => j.prefecture.region).filter(Boolean));
+  const cats = new Map<DestinationCategory, number>();
+  const months = new Map<number, number>();
+  let km = 0;
+  let spent = 0;
+  let farthest: YearRecap["farthest"] = null;
+  for (const j of done) {
+    km += j.distanceKm ?? 0;
+    spent += j.estimatedBudget?.total ?? 0;
+    for (const c of j.destination.categories) cats.set(c, (cats.get(c) ?? 0) + 1);
+    const iso = j.plannedDate ?? j.createdAt;
+    const m = iso ? Number(iso.slice(5, 7)) : NaN;
+    if (m >= 1 && m <= 12) months.set(m, (months.get(m) ?? 0) + 1);
+    if (!farthest || (j.distanceKm ?? 0) > farthest.km) {
+      farthest = { name: j.destination.name, prefecture: j.prefecture.nameJa, km: j.distanceKm ?? 0 };
+    }
+  }
+  const top = [...cats.entries()].sort((a, b) => b[1] - a[1])[0];
+  const busiest = [...months.entries()].sort((a, b) => b[1] - a[1])[0];
+  return {
+    year,
+    places: done.length,
+    saved: inYear.length,
+    prefectures: prefs.size,
+    regions: regions.size,
+    km: Math.round(km),
+    spentYen: spent,
+    topCategory: top ? top[0] : null,
+    topCategoryCount: top ? top[1] : 0,
+    farthest,
+    busiestMonth: busiest ? busiest[0] : null,
+  };
+}

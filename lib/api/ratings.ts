@@ -26,10 +26,16 @@ export const EXCLUDE_MIN_DOWN = 3;
 export const EXCLUDE_RATIO = 2;
 
 export type Vote = 1 | -1;
-export type PlaceRating = { up: number; down: number; myVote: Vote | 0 };
+export type PlaceRating = {
+  up: number;
+  down: number;
+  myVote: Vote | 0;
+  // Set by an admin: keep the place in the randomizer despite 👎.
+  whitelisted?: boolean;
+};
 
-export function isExcluded(up: number, down: number): boolean {
-  return down >= EXCLUDE_MIN_DOWN && down >= EXCLUDE_RATIO * up;
+export function isExcluded(up: number, down: number, whitelisted = false): boolean {
+  return !whitelisted && down >= EXCLUDE_MIN_DOWN && down >= EXCLUDE_RATIO * up;
 }
 
 export async function getPlaceRating(
@@ -49,6 +55,7 @@ export async function getPlaceRating(
     up: Number(data.up) || 0,
     down: Number(data.down) || 0,
     myVote,
+    whitelisted: data.whitelisted === true,
   };
 }
 
@@ -71,7 +78,8 @@ export async function votePlace(
     const prev: Vote | 0 = voteSnap.exists() ? (voteSnap.data().value as Vote) : 0;
     let up = ratingSnap.exists() ? Number(ratingSnap.data().up) || 0 : 0;
     let down = ratingSnap.exists() ? Number(ratingSnap.data().down) || 0 : 0;
-    if (prev === value) return { up, down, myVote: value };
+    const whitelisted = ratingSnap.exists() && ratingSnap.data().whitelisted === true;
+    if (prev === value) return { up, down, myVote: value, whitelisted };
 
     if (prev === 1) up -= 1;
     if (prev === -1) down -= 1;
@@ -90,7 +98,7 @@ export async function votePlace(
       });
     }
     tx.set(voteRef, { value, updatedAt: serverTimestamp() });
-    return { up, down, myVote: value };
+    return { up, down, myVote: value, whitelisted };
   });
 
   // Personal hide list (private user space).
@@ -126,7 +134,8 @@ export async function getExcludedPlaceIds(uid?: string | null): Promise<Set<stri
     );
     snap.forEach((entry) => {
       const d = entry.data();
-      if (isExcluded(Number(d.up) || 0, Number(d.down) || 0)) ids.add(entry.id);
+      if (isExcluded(Number(d.up) || 0, Number(d.down) || 0, d.whitelisted === true))
+        ids.add(entry.id);
     });
   } catch {
     // rules not deployed yet / offline — just don't filter globally

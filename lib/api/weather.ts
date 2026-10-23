@@ -12,6 +12,8 @@ type OpenMeteoResponse = {
     temperature_2m_max: number[];
     temperature_2m_min: number[];
     precipitation_probability_max: (number | null)[];
+    sunrise?: string[];
+    sunset?: string[];
   };
 };
 
@@ -105,7 +107,7 @@ export async function getWeatherByCoordinates(
       longitude: String(longitude),
       current: "temperature_2m,weather_code",
       daily:
-        "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+        "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
       timezone: "Asia/Tokyo",
       forecast_days: "16",
     });
@@ -126,6 +128,11 @@ export async function getWeatherByCoordinates(
       const precipitation =
         typeof precipRaw === "number" ? precipRaw : undefined;
       const { icon, description } = classify(daily.weather_code[index]);
+      // "2026-10-24T05:58" (local, Asia/Tokyo) → "5:58"
+      const hhmm = (iso?: string) => {
+        const m = iso?.match(/T(\d{2}):(\d{2})/);
+        return m ? `${Number(m[1])}:${m[2]}` : undefined;
+      };
       return {
         data: {
           temperature: high,
@@ -137,6 +144,8 @@ export async function getWeatherByCoordinates(
           low,
           precipitation,
           forDate: wanted,
+          sunrise: hhmm(daily.sunrise?.[index]),
+          sunset: hhmm(daily.sunset?.[index]),
         },
         provider: "live",
       };

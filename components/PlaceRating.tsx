@@ -103,7 +103,7 @@ export function PlaceRating({
           了解！次からこの場所はあなたの抽選に出てきません。
         </p>
       )}
-      {mine !== -1 && isExcluded(up, down) && (
+      {mine !== -1 && isExcluded(up, down, rating?.whitelisted) && (
         <p className="mt-2.5 text-[11px] font-medium text-[color:var(--brand-ink)]">
           みんなの評価が低いため、通常は抽選から外れている場所です。
         </p>

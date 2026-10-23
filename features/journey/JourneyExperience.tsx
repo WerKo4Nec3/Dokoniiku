@@ -10,6 +10,8 @@ import {
   Car,
   Check,
   Link2,
+  Sunrise,
+  Sunset,
   ChevronRight,
   Cloud,
   CloudRain,
@@ -51,7 +53,9 @@ import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { readPreferences } from "@/lib/preferences";
 import { encodeTrip } from "@/lib/tripShare";
 import { getExcludedPlaceIds } from "@/lib/api/ratings";
+import { trackSave, trackSearch } from "@/lib/analytics";
 import { PlaceRating } from "@/components/PlaceRating";
+import { AccessCard } from "@/components/AccessCard";
 import {
   getDestinationImages,
   getDestinationSummary,
@@ -798,6 +802,7 @@ export function JourneyExperience() {
     const landed = new Promise<void>((resolve) => {
       revealLanded.current = resolve;
     });
+    trackSearch(prefecture.id, plan.destination.categories);
     const startedAt = nowMs();
     const picked = plan.destination;
     const transport = plan.transport;
@@ -979,6 +984,7 @@ export function JourneyExperience() {
     setSavedJourneyId(journey.id);
     try {
       await saveJourneyForUser(user.uid, journey);
+      trackSave();
     } catch {
       setSavedJourneyId(null); // saving failed — let the user retry
     }
@@ -2260,6 +2266,22 @@ export function JourneyExperience() {
                         )}
                       </p>
                     )}
+                    {(journey.weather.sunrise || journey.weather.sunset) && (
+                      <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs font-bold text-[color:var(--muted)]">
+                        {journey.weather.sunrise && (
+                          <span className="inline-flex items-center gap-1">
+                            <Sunrise size={13} className="text-sun" />
+                            日の出 {journey.weather.sunrise}
+                          </span>
+                        )}
+                        {journey.weather.sunset && (
+                          <span className="inline-flex items-center gap-1">
+                            <Sunset size={13} className="text-vermilion" />
+                            日の入り {journey.weather.sunset}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <WeatherIcon weather={journey.weather} />
                 </div>
@@ -2304,6 +2326,13 @@ export function JourneyExperience() {
                   </p>
                 </div>
               </div>
+
+              <AccessCard
+                key={`access-${journey.destination.id}`}
+                className="order-4 lg:order-none"
+                start={journey.start}
+                destination={journey.destination}
+              />
 
               <div className="order-5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
                 <h3 className="text-sm font-black">

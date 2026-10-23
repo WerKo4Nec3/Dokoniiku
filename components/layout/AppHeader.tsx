@@ -9,6 +9,7 @@ import {
   LogOut,
   Moon,
   Settings,
+  ShieldCheck,
   Sun,
   Users,
   UsersRound,
@@ -17,6 +18,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { syncThemeColor } from "@/lib/themeColor";
+import { trackVisit } from "@/lib/analytics";
+import { checkAdmin } from "@/lib/api/admin";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -37,10 +40,25 @@ export function AppHeader() {
   );
   const { enabled, loading, user, signOutUser } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+    let active = true;
+    checkAdmin(user.uid).then((ok) => active && setIsAdmin(ok));
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   // Next can add theme-color tags after hydration; align them all once mounted.
+  // Also count the visit (once per browser per day) for the admin dashboard.
   useEffect(() => {
     syncThemeColor();
+    void trackVisit();
   }, []);
 
   function toggleTheme() {
@@ -160,6 +178,16 @@ export function AppHeader() {
                       <CircleUserRound size={16} />
                       プロフィール
                     </Link>
+                    {isAdmin && (
+                      <Link
+                        href="/admin"
+                        onClick={() => setMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-vermilion transition hover:bg-[color:var(--surface-muted)]"
+                      >
+                        <ShieldCheck size={16} />
+                        管理ダッシュボード
+                      </Link>
+                    )}
                     <Link
                       href="/settings"
                       onClick={() => setMenuOpen(false)}

@@ -14,6 +14,7 @@ import { PassportStamps } from "@/components/PassportStamps";
 import { JapanGeoMap } from "@/components/JapanGeoMap";
 import { ProfileCard } from "@/components/ProfileCard";
 import { ProfileGameStats } from "@/components/ProfileGameStats";
+import { YearRecap } from "@/components/YearRecap";
 import type { PublicProfile, TabibitoProfile } from "@/types";
 
 export default function ProfilePage() {
@@ -109,6 +110,8 @@ export default function ProfilePage() {
           />
 
           <ProfileGameStats journeys={journeys ?? []} />
+
+          <YearRecap journeys={journeys ?? []} />
 
           <FriendLeaderboard
             me={{
