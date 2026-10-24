@@ -145,7 +145,7 @@ export const transportInfo: Record<
   }
 > = {
   walk: { labelJa: "徒歩", speedKmh: 4.5, yenPerKm: 0, perPerson: false, overheadMin: 0 },
-  bicycle: { labelJa: "自転車", speedKmh: 14, yenPerKm: 0, perPerson: false, overheadMin: 0 },
+  bicycle: { labelJa: "自転車", speedKmh: 15, yenPerKm: 0, perPerson: false, overheadMin: 0 },
   motorbike: { labelJa: "バイク", speedKmh: 35, yenPerKm: 12, perPerson: false, overheadMin: 10 },
   car: { labelJa: "車", speedKmh: 45, yenPerKm: 20, perPerson: false, overheadMin: 10 },
   train: { labelJa: "電車", speedKmh: 55, yenPerKm: 22, perPerson: true, overheadMin: 20 },
@@ -245,11 +245,19 @@ export function bestTransport(opts: {
   transfer: boolean;
   maxBudget: number;
   maxOneWayMinutes: number;
+  /** Cycling: how far the rider can go in a day (round trip), and trip days. */
+  bikeRangeKm?: number;
+  days?: number;
 }): { mode: TransportMode; minutes: number; total: number } | null {
   let best: { mode: TransportMode; minutes: number; total: number } | null = null;
   for (const mode of opts.modes) {
     const minutes = travelMinutes(opts.distanceKm, mode, opts.transfer);
-    if (minutes > opts.maxOneWayMinutes) continue;
+    // Cyclists know their own range; for everything else the clock decides.
+    const fits =
+      mode === "bicycle" && opts.bikeRangeKm
+        ? opts.distanceKm <= bikeOneWayKm(opts.bikeRangeKm, opts.days ?? 1)
+        : minutes <= opts.maxOneWayMinutes;
+    if (!fits) continue;
     const total = estimateBudget(
       opts.distanceKm,
       opts.categories,
@@ -261,6 +269,34 @@ export function bestTransport(opts: {
     if (!best || total < best.total) best = { mode, minutes, total };
   }
   return best;
+}
+
+// A day of riding covers `rangeKm` there and back; an n-day trip can ride
+// out on the first half of the days and back on the rest.
+export function bikeOneWayKm(rangeKm: number, days: number): number {
+  return Math.round((rangeKm * Math.max(1, days)) / 2);
+}
+
+// The furthest one-way distance any of the chosen modes can cover within the
+// trip (time for motorised modes, the rider's range for bicycles), capped by
+// the distance limit. Used to pick prefectures that are actually reachable.
+export function reachKm(opts: {
+  modes: TransportMode[];
+  maxOneWayMinutes: number;
+  maxDistanceKm: number;
+  bikeRangeKm?: number;
+  days?: number;
+}): number {
+  let reach = 0;
+  for (const mode of opts.modes) {
+    const info = transportInfo[mode];
+    const km =
+      mode === "bicycle" && opts.bikeRangeKm
+        ? bikeOneWayKm(opts.bikeRangeKm, opts.days ?? 1)
+        : ((opts.maxOneWayMinutes - info.overheadMin) / 60) * info.speedKmh;
+    reach = Math.max(reach, km);
+  }
+  return Math.max(0, Math.min(Math.round(reach), opts.maxDistanceKm));
 }
 
 export function formatMinutes(minutes: number) {

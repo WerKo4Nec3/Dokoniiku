@@ -18,7 +18,6 @@ import {
   CloudRain,
   ExternalLink,
   Footprints,
-  Heart,
   House,
   Images,
   Info,
@@ -54,7 +53,7 @@ import {
   saveRecentForUser,
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
-import { openPreferences, readPreferences, usePreferences } from "@/lib/preferences";
+import { readPreferences } from "@/lib/preferences";
 import { encodeTrip } from "@/lib/tripShare";
 import { getExcludedPlaceIds } from "@/lib/api/ratings";
 import { trackSave, trackSearch } from "@/lib/analytics";
@@ -87,6 +86,7 @@ import { buildShareCard } from "@/lib/share/shareCard";
 import {
   allTransportModes,
   bestTransport,
+  bikeOneWayKm,
   categoryLabels,
   directionTowards,
   CURRENT_SEASON,
@@ -102,6 +102,7 @@ import {
   pickDirection,
   pickPrefecture,
   randomItem,
+  reachKm,
   seasonInfo,
   transportInfo,
   transportLabel,
@@ -424,7 +425,6 @@ export function JourneyExperience() {
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
   const [scope, setScope] = useState<"nearby" | "all">("nearby");
   const [people, setPeople] = useState(1);
-  const favourites = usePreferences();
   // Painted scene behind landing → mode → compass → prefecture.
   const [scene, setScene] = useState<Scene | null>(null);
   const [spins, setSpins] = useState(0);
@@ -440,6 +440,14 @@ export function JourneyExperience() {
     "shinkansen",
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
+  // Cycling: how far the rider goes in a day, there and back.
+  const [bikeRange, setBikeRange] = useState(60);
+  // Places fetched for the current prefecture + genres, so changing the
+  // settings can re-check them instantly instead of searching again.
+  const [candidateCache, setCandidateCache] = useState<{
+    key: string;
+    candidates: Destination[];
+  } | null>(null);
   // Party-total budget cap grows with the headcount so large groups aren't
   // stuck under a fixed ¥100,000 ceiling that no plan can ever satisfy.
   const budgetMax = Math.max(BUDGET_MIN, BUDGET_PER_PERSON_MAX * people);
@@ -685,6 +693,39 @@ export function JourneyExperience() {
   const maxOneWayMinutes =
     tripLengthOptions.find((option) => option.id === tripLength)
       ?.maxOneWayMinutes ?? 180;
+  const tripDays = tripLength === "day" ? 1 : tripLength === "one-night" ? 2 : 3;
+  const usableModes: TransportMode[] = transports.length ? transports : ["train"];
+  const cycling = usableModes.includes("bicycle");
+  // How far this trip can go one way with the chosen modes and days.
+  const reach = reachKm({
+    modes: usableModes,
+    maxOneWayMinutes,
+    maxDistanceKm: maxDistance,
+    bikeRangeKm: cycling ? bikeRange : undefined,
+    days: tripDays,
+  });
+
+  // Custom mode: which fetched places fit the budget, time/range and modes.
+  function feasiblePlans(candidates: Destination[]): Plan[] {
+    const plans: Plan[] = [];
+    for (const candidate of candidates) {
+      const distance = haversineDistanceKm(start, candidate);
+      if (distance > maxDistance) continue;
+      const best = bestTransport({
+        distanceKm: distance,
+        categories: candidate.categories,
+        people,
+        modes: usableModes,
+        transfer: allowTransfer,
+        maxBudget: budget,
+        maxOneWayMinutes,
+        bikeRangeKm: cycling ? bikeRange : undefined,
+        days: tripDays,
+      });
+      if (best) plans.push({ destination: candidate, transport: best.mode });
+    }
+    return plans;
+  }
 
   function beginDirectionSelection() {
     setSpins((count) => count + 1);
@@ -714,14 +755,21 @@ export function JourneyExperience() {
     setShuffleOptions([]);
   }
 
-  function choosePrefecture() {
+  function choosePrefecture(exclude?: string) {
     if (!direction) return;
     let pool: Prefecture[];
     if (journeyMode === "custom") {
-      // Custom: keep prefectures within the chosen max distance.
-      pool = prefectures.filter(
-        (item) => haversineDistanceKm(start, item) <= maxDistance,
+      // Custom: only prefectures this trip can actually reach (their capital
+      // within reach, with a little slack since places spread around it),
+      // plus the one we start in.
+      const slack = Math.min(30, Math.max(10, reach * 0.2));
+      const home = prefectures.reduce((best, item) =>
+        haversineDistanceKm(start, item) < haversineDistanceKm(start, best) ? item : best,
       );
+      pool = prefectures.filter(
+        (item) => item.id === home.id || haversineDistanceKm(start, item) <= reach + slack,
+      );
+      if (exclude && pool.length > 1) pool = pool.filter((item) => item.id !== exclude);
     } else if (scope === "all") {
       pool = prefectures;
     } else {
@@ -752,6 +800,8 @@ export function JourneyExperience() {
     const excluded = await getExcludedPlaceIds(user?.uid);
     const candidates = places.data.filter((place) => !excluded.has(place.id));
 
+    setCandidateCache({ key: `${prefecture.id}|${selectedCategories.join(",")}`, candidates });
+
     if (!candidates.length) {
       setFilterNotice(
         "選んだジャンルに合う場所が見つかりませんでした。ジャンルを変えるか、メインに戻って別の方角を試してみてね。",
@@ -763,29 +813,14 @@ export function JourneyExperience() {
 
     let plans: Plan[];
     if (journeyMode === "custom") {
-      const usableModes: TransportMode[] = transports.length
-        ? transports
-        : ["train"];
-      plans = [];
-      for (const candidate of candidates) {
-        const distance = haversineDistanceKm(start, candidate);
-        if (distance > maxDistance) continue;
-        const best = bestTransport({
-          distanceKm: distance,
-          categories: candidate.categories,
-          people,
-          modes: usableModes,
-          transfer: allowTransfer,
-          maxBudget: budget,
-          maxOneWayMinutes,
-        });
-        if (!best) continue;
-        plans.push({ destination: candidate, transport: best.mode });
-      }
-
+      plans = feasiblePlans(candidates);
       if (!plans.length) {
+        // Say why: how far this trip reaches vs. the closest place here.
+        const nearest = Math.min(...candidates.map((item) => haversineDistanceKm(start, item)));
         setFilterNotice(
-          "設定した条件に合う場所が見つかりませんでした。下の設定で予算・距離・時間・移動手段をゆるめて、もう一度さがしてみてね。",
+          nearest > reach
+            ? `この設定で行けるのは片道 約${reach}kmまで。${prefecture.nameJa}でいちばん近い候補は約${nearest}km先でした。移動手段や日数を変えるか、行ける範囲の都道府県で探してみてね。`
+            : "距離は届くけど、予算か移動時間が合いませんでした。下の設定をゆるめてみてね。",
         );
         setSettingsOpen(true);
         setStage("prefecture");
@@ -1121,6 +1156,13 @@ export function JourneyExperience() {
   }
 
   const filtersActive = selectedCategories.length > 0;
+  // After a miss, re-check the places we already fetched as settings change.
+  const liveMatches =
+    journeyMode === "custom" &&
+    prefecture &&
+    candidateCache?.key === `${prefecture.id}|${selectedCategories.join(",")}`
+      ? feasiblePlans(candidateCache.candidates).length
+      : null;
 
   const filterPanel = (
     <div className="mt-6 border-t border-[color:var(--line)] pt-6">
@@ -1176,9 +1218,11 @@ export function JourneyExperience() {
     </div>
   );
 
-  // Budget / time / distance / transport knobs. Shared between the landing
-  // custom mode and the "loosen your settings" panel on the prefecture stage.
-  const customKnobs = (
+  // Budget / time / distance / transport knobs. Shared between the mode page
+  // and the "loosen your settings" panel on the prefecture stage — where the
+  // distance limit is gone (the prefecture is already chosen).
+  const humanPoweredOnly = usableModes.every((mode) => mode === "bicycle" || mode === "walk");
+  const renderKnobs = (atPrefecture: boolean) => (
     <div className="space-y-3 text-left">
       <KnobCard
         icon={WalletCards}
@@ -1225,7 +1269,9 @@ export function JourneyExperience() {
                 <Icon size={18} />
                 {option.labelJa}
                 <span className="text-[10px] font-medium opacity-70">
-                  片道〜{Math.round(option.maxOneWayMinutes / 60)}h
+                  {cycling && humanPoweredOnly
+                    ? `片道〜${bikeOneWayKm(bikeRange, option.id === "day" ? 1 : option.id === "one-night" ? 2 : 3)}km`
+                    : `片道〜${Math.round(option.maxOneWayMinutes / 60)}h`}
                 </span>
               </button>
             );
@@ -1233,30 +1279,32 @@ export function JourneyExperience() {
         </div>
       </KnobCard>
 
-      <KnobCard
-        icon={Route}
-        title="出発地からの距離（上限）"
-        value={`約${maxDistance}km`}
-      >
-        <input
-          type="range"
-          min={5}
-          max={DISTANCE_MAX}
-          step={5}
-          value={maxDistance}
-          onChange={(event) => setMaxDistance(Number(event.target.value))}
-          className="range-brand"
-          style={
-            {
-              "--fill": `${sliderFill(maxDistance, 5, DISTANCE_MAX)}%`,
-            } as React.CSSProperties
-          }
-        />
-        <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
-          <span>5km</span>
-          <span>{DISTANCE_MAX}km</span>
-        </div>
-      </KnobCard>
+      {!atPrefecture && (
+        <KnobCard
+          icon={Route}
+          title="出発地からの距離（上限）"
+          value={`約${maxDistance}km`}
+        >
+          <input
+            type="range"
+            min={5}
+            max={DISTANCE_MAX}
+            step={5}
+            value={maxDistance}
+            onChange={(event) => setMaxDistance(Number(event.target.value))}
+            className="range-brand"
+            style={
+              {
+                "--fill": `${sliderFill(maxDistance, 5, DISTANCE_MAX)}%`,
+              } as React.CSSProperties
+            }
+          />
+          <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+            <span>5km</span>
+            <span>{DISTANCE_MAX}km</span>
+          </div>
+        </KnobCard>
+      )}
 
       <KnobCard icon={TrainFront} title="移動手段（複数選択可）">
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -1290,6 +1338,24 @@ export function JourneyExperience() {
           })}
         </div>
       </KnobCard>
+
+      {cycling && (
+        <KnobCard icon={Bike} title="自転車で1日に走れる距離（往復）" value={`${bikeRange}km`}>
+          <input
+            type="range"
+            min={20}
+            max={200}
+            step={5}
+            value={bikeRange}
+            onChange={(event) => setBikeRange(Number(event.target.value))}
+            className="range-brand"
+            style={{ "--fill": `${sliderFill(bikeRange, 20, 200)}%` } as React.CSSProperties}
+          />
+          <p className="mt-1.5 text-[11px] font-medium text-[color:var(--muted)]">
+            日帰りなら片道〜{bikeOneWayKm(bikeRange, 1)}km、1泊2日なら片道〜{bikeOneWayKm(bikeRange, 2)}km。
+          </p>
+        </KnobCard>
+      )}
 
       <KnobCard icon={Ticket} title="乗り継ぎ（タクシー等）">
         <div className="flex items-center justify-between gap-3">
@@ -1463,18 +1529,6 @@ export function JourneyExperience() {
                 <Users size={13} className="text-vermilion" />
                 {people}名
               </span>
-              {/* Optional: favourite genres nudge the random pick. */}
-              <button
-                type="button"
-                onClick={openPreferences}
-                className="scene-glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-[color:var(--foreground)]"
-              >
-                <Heart size={13} className="text-vermilion" />
-                {favourites.length
-                  ? favourites.map((category) => categoryLabels[category]).join("・")
-                  : "好きなジャンル（任意）"}
-                <ChevronRight size={13} className="text-[color:var(--muted)]" />
-              </button>
             </motion.div>
 
             <ExpandPanel open={startPickerOpen} className="max-w-md">
@@ -1607,7 +1661,10 @@ export function JourneyExperience() {
 
             <ExpandPanel open={journeyMode === "custom"}>
               <div className="scene-glass mt-4 rounded-[28px] p-4 sm:p-6">
-                {customKnobs}
+                {renderKnobs(false)}
+                <p className="mt-3 text-center text-xs font-bold text-[color:var(--muted)]">
+                  この設定で行ける範囲：片道 約{reach}km
+                </p>
                 <div className="mt-5 flex justify-end">
                   <button type="button" onClick={beginDirectionSelection} className="scene-cta group">
                     この条件で出発
@@ -1688,7 +1745,7 @@ export function JourneyExperience() {
               <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center md:justify-start">
                 <button
                   type="button"
-                  onClick={choosePrefecture}
+                  onClick={() => choosePrefecture()}
                   disabled={selecting || !direction}
                   className="scene-cta group justify-center"
                 >
@@ -1774,11 +1831,29 @@ export function JourneyExperience() {
 
                 {filterPanel}
 
-                {filterNotice && (
-                  <div className="mt-5 flex items-start gap-2 rounded-2xl border border-vermilion/40 bg-vermilion/10 px-4 py-3 text-xs font-medium leading-5">
-                    <Info size={16} className="mt-0.5 shrink-0 text-vermilion" />
-                    <span>{filterNotice}</span>
+                {filterNotice && liveMatches !== null && liveMatches > 0 ? (
+                  <div className="mt-5 flex items-start gap-2 rounded-2xl border border-forest/40 bg-forest/10 px-4 py-3 text-xs font-bold leading-5 text-forest dark:text-forest-ink">
+                    <Check size={16} className="mt-0.5 shrink-0" />
+                    <span>いまの設定なら{liveMatches}か所見つかるよ！「目的地を決める」をどうぞ。</span>
                   </div>
+                ) : (
+                  filterNotice && (
+                    <div className="mt-5 rounded-2xl border border-vermilion/40 bg-vermilion/10 px-4 py-3 text-xs font-medium leading-5">
+                      <p className="flex items-start gap-2">
+                        <Info size={16} className="mt-0.5 shrink-0 text-vermilion" />
+                        <span>{filterNotice}</span>
+                      </p>
+                      {journeyMode === "custom" && (
+                        <button
+                          type="button"
+                          onClick={() => choosePrefecture(prefecture.id)}
+                          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-vermilion px-4 py-2 text-xs font-bold text-white"
+                        >
+                          <Route size={14} /> 行ける範囲の都道府県で探す
+                        </button>
+                      )}
+                    </div>
+                  )
                 )}
 
                 {journeyMode === "custom" && (
@@ -1789,10 +1864,10 @@ export function JourneyExperience() {
                       className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
                     >
                       <SlidersHorizontal size={14} />
-                      予算・距離・時間・移動手段を調整
+                      予算・日数・移動手段を調整
                     </button>
                     <ExpandPanel open={settingsOpen}>
-                      <div className="mt-3">{customKnobs}</div>
+                      <div className="mt-3">{renderKnobs(true)}</div>
                     </ExpandPanel>
                   </div>
                 )}
