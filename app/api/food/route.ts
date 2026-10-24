@@ -1,10 +1,11 @@
 import { preciseDistanceKm } from "@/lib/utils/travel";
 
-// GET /api/food?lat=..&lon=.. → { source, places }
+// GET /api/food?lat=..&lon=..[&name=..] → { source, places, venue }
 // Restaurants & cafés with their budget, from the HotPepper Gourmet API
 // (Recruit). It needs a free key (HOTPEPPER_API_KEY, server-only); without
 // one this answers { source: null } and the page falls back to OpenStreetMap
-// eateries (names only — OSM has no prices).
+// eateries (names only — OSM has no prices). With `name`, `venue` is the
+// destination itself when HotPepper lists it (matched by name, ≤1 km).
 
 export type FoodPlace = {
   name: string;
@@ -39,6 +40,34 @@ function pickBudget(budget: Shop["budget"]): string | undefined {
   return budget?.name?.trim() || undefined;
 }
 
+const norm = (text: string) =>
+  text.replace(/\s*[(（][^()（）]*[)）]$/, "").replace(/[\s　・「」『』\-‐]/g, "").toLowerCase();
+
+function toPlace(shop: Shop, lat: number, lon: number): FoodPlace {
+  const point = { latitude: Number(shop.lat), longitude: Number(shop.lng) };
+  return {
+    name: shop.name,
+    genre: shop.genre?.name || undefined,
+    budget: pickBudget(shop.budget),
+    catch: shop.catch || undefined,
+    photo: shop.photo?.pc?.m,
+    url: shop.urls?.pc,
+    open: shop.open,
+    ...point,
+    distanceM: Math.round(preciseDistanceKm({ latitude: lat, longitude: lon }, point) * 1000),
+  };
+}
+
+async function search(params: Record<string, string>): Promise<Shop[]> {
+  const response = await fetch(
+    `https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?${new URLSearchParams(params)}`,
+    { next: { revalidate: 3600 } },
+  );
+  if (!response.ok) throw new Error(`HotPepper ${response.status}`);
+  const data = (await response.json()) as { results?: { shop?: Shop[] } };
+  return data.results?.shop ?? [];
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const lat = Number(searchParams.get("lat"));
@@ -49,37 +78,22 @@ export async function GET(req: Request) {
   const key = process.env.HOTPEPPER_API_KEY;
   if (!key) return Response.json({ source: null, places: [] });
 
+  const name = (searchParams.get("name") ?? "").trim().slice(0, 60);
+  const base = { key, lat: lat.toFixed(4), lng: lon.toFixed(4), format: "json" };
   try {
-    const params = new URLSearchParams({
-      key,
-      lat: lat.toFixed(4),
-      lng: lon.toFixed(4),
-      range: "3", // 1000 m
-      count: "12",
-      format: "json",
+    const [nearby, named] = await Promise.all([
+      search({ ...base, range: "3", count: "12" }), // 1000 m
+      name ? search({ ...base, range: "3", count: "5", keyword: norm(name) }).catch(() => []) : [],
+    ]);
+    const places = nearby.map((shop) => toPlace(shop, lat, lon)).sort((x, y) => x.distanceM - y.distanceM);
+    // Only a real name match counts as "this place" — never a random shop.
+    const wanted = norm(name);
+    const match = named.find((shop) => {
+      const shopName = norm(shop.name);
+      return wanted.length >= 2 && (shopName.includes(wanted) || wanted.includes(shopName));
     });
-    const response = await fetch(`https://webservice.recruit.co.jp/hotpepper/gourmet/v1/?${params}`, {
-      next: { revalidate: 3600 },
-    });
-    if (!response.ok) throw new Error(`HotPepper ${response.status}`);
-    const data = (await response.json()) as { results?: { shop?: Shop[] } };
-    const places: FoodPlace[] = (data.results?.shop ?? []).map((shop) => {
-      const point = { latitude: Number(shop.lat), longitude: Number(shop.lng) };
-      return {
-        name: shop.name,
-        genre: shop.genre?.name || undefined,
-        budget: pickBudget(shop.budget),
-        catch: shop.catch || undefined,
-        photo: shop.photo?.pc?.m,
-        url: shop.urls?.pc,
-        open: shop.open,
-        ...point,
-        distanceM: Math.round(preciseDistanceKm({ latitude: lat, longitude: lon }, point) * 1000),
-      };
-    });
-    places.sort((a, b) => a.distanceM - b.distanceM);
     return Response.json(
-      { source: "hotpepper", places },
+      { source: "hotpepper", places, venue: match ? toPlace(match, lat, lon) : null },
       { headers: { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" } },
     );
   } catch {

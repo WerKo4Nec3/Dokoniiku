@@ -16,6 +16,7 @@ import { getDestinationFacts } from "@/lib/api/wikipedia";
 import { type NearbyCategory, type NearbyGroup } from "@/lib/api/nearby";
 import { fetchAround } from "@/lib/api/around";
 import { type MenuInfo } from "@/lib/api/menu";
+import type { FoodPlace } from "@/app/api/food/route";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 
 type Video = { id: string; title: string; channel: string; thumb: string };
@@ -448,6 +449,9 @@ export function MenuCard({
   className?: string;
 }) {
   const [info, setInfo] = useState<MenuInfo | null>(null);
+  // HotPepper (when the server has a key): the venue itself + nearby shops,
+  // both with budgets. Fills in when OpenStreetMap knows nothing.
+  const [hotpepper, setHotpepper] = useState<{ venue: FoodPlace | null; places: FoodPlace[] } | null>(null);
   const [aiMenu, setAiMenu] = useState<string[] | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
@@ -457,6 +461,16 @@ export function MenuCard({
     fetchAround(latitude, longitude, name).then(
       (r) => active && setInfo(r.menu ?? { venue: null, eateries: [] }),
     );
+    fetch(
+      `/api/food?lat=${latitude.toFixed(4)}&lon=${longitude.toFixed(4)}&name=${encodeURIComponent(name)}`,
+    )
+      .then((response) => response.json())
+      .then((data: { source: string | null; places?: FoodPlace[]; venue?: FoodPlace | null }) => {
+        if (active && data.source === "hotpepper") {
+          setHotpepper({ venue: data.venue ?? null, places: data.places ?? [] });
+        }
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
@@ -485,10 +499,13 @@ export function MenuCard({
 
   const q = `${name} ${prefecture}`;
   const venue = info?.venue ?? null;
+  const hpVenue = !venue ? hotpepper?.venue ?? null : null;
+  const hpShops = !info?.eateries.length ? (hotpepper?.places ?? []).slice(0, 6) : [];
+  const usesHotpepper = Boolean(hpVenue || hpShops.length);
 
   return (
     <div className={`${CARD} ${className}`}>
-      <h3 className="inline-flex items-center gap-2 text-sm font-black">
+      <h3 className="flex items-center gap-2 text-sm font-black">
         <UtensilsCrossed size={16} className="text-vermilion" />
         メニュー
       </h3>
@@ -538,6 +555,46 @@ export function MenuCard({
         </div>
       )}
 
+      {hpVenue && (
+        <div className="mt-3 flex gap-3 rounded-lg bg-[color:var(--surface-muted)] p-3">
+          {hpVenue.photo && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={hpVenue.photo} alt="" className="h-16 w-16 shrink-0 rounded-lg object-cover" />
+          )}
+          <div className="min-w-0">
+            <p className="text-sm font-black">{hpVenue.name}</p>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {hpVenue.genre && (
+                <span className="rounded-full bg-vermilion/10 px-2.5 py-0.5 text-[11px] font-bold text-vermilion">
+                  {hpVenue.genre}
+                </span>
+              )}
+              {hpVenue.budget && (
+                <span className="rounded-full bg-sun/25 px-2.5 py-0.5 text-[11px] font-black text-[#7a5a05] dark:text-sun">
+                  予算 {hpVenue.budget}
+                </span>
+              )}
+            </div>
+            {hpVenue.open && (
+              <p className="mt-2 flex items-start gap-1.5 text-xs font-medium text-[color:var(--muted)]">
+                <Clock size={13} className="mt-0.5 shrink-0" />
+                <span className="line-clamp-2">{hpVenue.open}</span>
+              </p>
+            )}
+            {hpVenue.url && (
+              <a
+                href={hpVenue.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-2.5 inline-flex items-center gap-1 rounded-full bg-vermilion px-3 py-1.5 text-xs font-black text-white transition hover:opacity-90"
+              >
+                メニュー・写真を見る <ExternalLink size={11} />
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
       {aiMenu && (
         <ul className="mt-3 space-y-2">
           {aiMenu.map((line, i) => (
@@ -576,6 +633,32 @@ export function MenuCard({
         </MenuLink>
       </div>
 
+      {hpShops.length > 0 && (
+        <div className="mt-4 border-t border-[color:var(--line)] pt-3">
+          <p className="text-xs font-black text-[color:var(--muted)]">近くのお店</p>
+          <ul className="mt-2 space-y-1.5">
+            {hpShops.map((shop) => (
+              <li key={`${shop.name}-${shop.distanceM}`} className="flex items-center gap-2 text-sm">
+                <a
+                  href={shop.url ?? `https://www.google.com/maps/search/${encodeURIComponent(`${shop.name} ${prefecture}`)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="min-w-0 flex-1 truncate font-bold hover:text-vermilion"
+                >
+                  {shop.name}
+                </a>
+                {shop.budget && (
+                  <span className="shrink-0 text-[11px] font-bold text-[#7a5a05] dark:text-sun">{shop.budget}</span>
+                )}
+                <span className="shrink-0 text-[11px] font-bold text-[color:var(--muted)] tabular-nums">
+                  {shop.distanceM < 1000 ? `${shop.distanceM}m` : `${(shop.distanceM / 1000).toFixed(1)}km`}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {info && info.eateries.length > 0 && (
         <div className="mt-4 border-t border-[color:var(--line)] pt-3">
           <p className="text-xs font-black text-[color:var(--muted)]">近くのお店</p>
@@ -604,6 +687,14 @@ export function MenuCard({
 
       <p className="mt-4 text-[10px] text-[color:var(--muted)]">
         データ: OpenStreetMap ほか。営業時間・メニューは変わることがあります。
+        {usesHotpepper && (
+          <>
+            {" "}
+            <a href="http://webservice.recruit.co.jp/" target="_blank" rel="noreferrer" className="underline-offset-2 hover:underline">
+              Powered by ホットペッパーグルメ Webサービス
+            </a>
+          </>
+        )}
       </p>
     </div>
   );

@@ -16,6 +16,8 @@ export type OverpassElement = {
 
 const MIRRORS = [
   "https://overpass-api.de/api/interpreter",
+  // OSM France: kept answering when the others were down (Oct 2026).
+  "https://overpass.openstreetmap.fr/api/interpreter",
   "https://overpass.kumi.systems/api/interpreter",
   "https://overpass.private.coffee/api/interpreter",
 ];
