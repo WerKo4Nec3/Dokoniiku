@@ -13,6 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { notifyJourneysChanged } from "@/lib/journeyEvents";
 import { fixJourneyPhotos } from "@/lib/photos";
 import type { JourneyResult, PlaceStatus, SavedJourney } from "@/types";
 
@@ -30,6 +31,7 @@ export async function saveJourneyForUser(uid: string, journey: JourneyResult) {
     ...journey,
     savedAt: serverTimestamp(),
   });
+  notifyJourneysChanged();
 }
 
 export async function fetchUserJourneys(uid: string): Promise<SavedJourney[]> {
@@ -67,6 +69,7 @@ export async function setJourneyStatus(
     status,
     visited: status === "done",
   });
+  notifyJourneysChanged();
 }
 
 // Schedule (or, with null, unschedule) a place on the calendar.

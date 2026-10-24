@@ -46,6 +46,8 @@ export type Destination = Coordinates & {
   imageUrl?: string;
   // Extra photos pulled from Wikimedia Commons for the result gallery.
   images?: string[];
+  // ja.wikipedia article when it differs from the display name (quest spots).
+  wikiTitle?: string;
 };
 
 export type TransportMode =
@@ -116,6 +118,61 @@ export type SavedJourney = JourneyResult & {
   status?: PlaceStatus;
   // A day the user plans to go, as "YYYY-MM-DD".
   plannedDate?: string;
+  // The traveller's own record, written after arriving.
+  review?: TripReview;
+  // GPS-confirmed visits (ISO timestamps, oldest first).
+  checkIns?: string[];
+};
+
+export type TripReview = {
+  rating: number; // 1..5
+  text: string;
+  photoIds: string[];
+  // Arrival confirmed by GPS near the place.
+  verified: boolean;
+  visitedAt: string; // ISO
+  public: boolean;
+};
+
+// A trip the traveller said "let's go" to; it stays open until they arrive
+// and write their record (or give up).
+export type ActiveTrip = {
+  journey: JourneyResult;
+  startedAt: string; // ISO
+  arrivedAt?: string;
+  verified?: boolean;
+  // Done exploring; the record/rating step is showing.
+  finishedAt?: string;
+};
+
+// A public review shown on the place's result page.
+export type PlaceReview = {
+  uid: string;
+  name: string;
+  avatarEmoji?: string;
+  avatarColor?: string;
+  rating: number;
+  text: string;
+  photoIds: string[];
+  placeName: string;
+  prefecture: string;
+  verified: boolean;
+  visitedAt: string;
+};
+
+// A friend's live position (shared for a limited time).
+export type LiveLocation = {
+  uid: string;
+  name: string;
+  avatarEmoji?: string;
+  avatarColor?: string;
+  lat: number;
+  lon: number;
+  accuracy: number;
+  viewers: string[];
+  updatedAt: number; // ms
+  expiresAt: number; // ms
+  heading?: string; // active trip destination, if any
 };
 
 // The user's lightweight "tabibito" (traveller) profile.
@@ -124,6 +181,8 @@ export type TabibitoProfile = {
   bio?: string;
   avatarEmoji?: string;
   avatarColor?: string;
+  // Chosen きせかえ skin id (see lib/tabiSkin.ts).
+  tabiSkin?: string;
 };
 
 // ---- Social ----

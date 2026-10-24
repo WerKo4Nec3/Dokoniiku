@@ -38,6 +38,7 @@ import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { StatusPicker } from "@/components/StatusPicker";
 import { ShareToFriendButton } from "@/components/ShareToFriendButton";
+import { TripRecordSnippet } from "@/components/trip/TripRecordSnippet";
 import type {
   DestinationCategory,
   PlaceStatus,
@@ -403,6 +404,8 @@ export default function SavedPage() {
                           </span>
                         ))}
                     </div>
+
+                    {journey.review && <TripRecordSnippet review={journey.review} />}
 
                     <dl className="mt-4 space-y-1 text-xs font-bold text-[color:var(--muted)]">
                       <div className="flex justify-between">

@@ -21,7 +21,7 @@ import { TabiMascot } from "@/features/mascot/TabiMascot";
 type Video = { id: string; title: string; channel: string; thumb: string };
 
 const CARD =
-  "rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6";
+  "rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-6";
 
 // ---- 豆知識 (interesting facts) — always-visible card ----
 

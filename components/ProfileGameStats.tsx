@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo } from "react";
-import { Award, MapPin, Route, Sparkles, Trophy, Wallet } from "lucide-react";
+import Link from "next/link";
+import { Award, ChevronRight, MapPin, Route, Sparkles, Trophy, Wallet } from "lucide-react";
+import { Medal } from "@/components/achievements/Medal";
+import { TIER_LABELS, buildContext, evaluateAchievements, medalTier } from "@/lib/achievements";
 import type { SavedJourney } from "@/types";
 import { formatYen } from "@/lib/utils/travel";
 import {
-  computeAchievements,
   computeStats,
   computeStreak,
   computeWeeklyChallenge,
@@ -24,13 +26,19 @@ export function ProfileGameStats({
       xp,
       level: levelForXp(xp),
       stats: computeStats(journeys),
-      achievements: computeAchievements(journeys),
+      achievements: evaluateAchievements(buildContext(journeys)),
       streak: computeStreak(journeys, Date.now()),
       challenge: computeWeeklyChallenge(journeys, Date.now()),
     };
   }, [journeys]);
 
-  const earned = achievements.filter((a) => a.earned).length;
+  const totalTiers = achievements.reduce((sum, a) => sum + a.def.tiers.length, 0);
+  const earnedTiers = achievements.reduce((sum, a) => sum + a.tier + 1, 0);
+  // Highest tiers first, then the closest to the next one; secrets stay hidden.
+  const highlights = achievements
+    .filter((a) => !(a.def.secret && a.tier < 0) && a.value !== null)
+    .sort((a, b) => b.tier - a.tier || b.progress - a.progress)
+    .slice(0, 8);
 
   const tiles: { icon: typeof MapPin; value: string; label: string }[] = [
     {
@@ -148,50 +156,31 @@ export function ProfileGameStats({
         })}
       </div>
 
-      {/* Achievements */}
+      {/* Achievements: the most advanced ones, full list in the 実績 app. */}
       <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:p-6">
         <div className="flex items-center justify-between">
           <h3 className="inline-flex items-center gap-2 text-sm font-black">
             <Award size={16} className="text-sun" />
             実績
           </h3>
-          <span className="rounded-full bg-vermilion/10 px-2.5 py-1 text-xs font-black text-vermilion tabular-nums">
-            {earned}/{achievements.length}
-          </span>
+          <Link
+            href="/achievements"
+            className="inline-flex items-center gap-1 rounded-full bg-vermilion/10 px-3 py-1 text-xs font-black text-vermilion"
+          >
+            {earnedTiers}/{totalTiers} メダル・すべて見る
+            <ChevronRight size={13} />
+          </Link>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {achievements.map((a) => (
-            <div
-              key={a.id}
-              className={`rounded-xl border p-3 text-center transition ${
-                a.earned
-                  ? "border-vermilion/40 bg-vermilion/5"
-                  : "border-[color:var(--line)]"
-              }`}
-            >
-              <span
-                className={`mx-auto grid h-12 w-12 place-items-center rounded-full text-2xl ${
-                  a.earned
-                    ? "bg-sun/20"
-                    : "bg-[color:var(--surface-muted)] opacity-40 grayscale"
-                }`}
-              >
-                {a.emoji}
-              </span>
-              <p className="mt-2 text-xs font-black leading-tight">{a.name}</p>
-              <p className="mt-0.5 text-[10px] leading-tight text-[color:var(--muted)]">
-                {a.desc}
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {highlights.map(({ def, tier, value, next }) => (
+            <div key={def.id} className="flex flex-col items-center rounded-xl border border-[color:var(--line)] p-3 text-center">
+              <Medal emoji={def.emoji} tier={medalTier(def, Math.max(0, tier))} locked={tier < 0} size={48} />
+              <p className="mt-2 text-xs font-black leading-tight">{def.name}</p>
+              <p className="mt-0.5 text-[10px] font-bold text-[color:var(--muted)] tabular-nums">
+                {tier >= 0 && def.tiers.length > 1 ? `${TIER_LABELS[medalTier(def, tier)]}・` : ""}
+                {next === null ? "コンプリート" : `${(value ?? 0).toLocaleString("ja-JP")}/${next.toLocaleString("ja-JP")}`}
               </p>
-              {a.earned ? (
-                <p className="mt-1.5 text-[10px] font-black text-vermilion">
-                  達成！
-                </p>
-              ) : (
-                <p className="mt-1.5 text-[10px] font-bold text-[color:var(--muted)] tabular-nums">
-                  {a.current.toLocaleString()}/{a.target.toLocaleString()}
-                </p>
-              )}
             </div>
           ))}
         </div>

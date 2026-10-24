@@ -1,15 +1,17 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import type { TabiPose } from "@/lib/tabiSkin";
+import { TabiSprite } from "./TabiSprite";
 
 type MascotMood = "idle" | "excited" | "thinking" | "reveal" | "walking";
 
-const moodImage: Record<MascotMood, string> = {
-  idle: "/mascot/waving.png",
-  thinking: "/mascot/map.png",
-  walking: "/mascot/walking.png",
-  excited: "/mascot/camera.png",
-  reveal: "/mascot/pointing.png",
+const moodPose: Record<MascotMood, TabiPose> = {
+  idle: "waving",
+  thinking: "map",
+  walking: "walking",
+  excited: "camera",
+  reveal: "pointing",
 };
 
 const moodLabel: Record<MascotMood, string> = {
@@ -59,12 +61,7 @@ export function TabiMascot({
         ease: "easeInOut",
       }}
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={moodImage[mood]}
-        alt={moodLabel[mood]}
-        className="h-full w-full object-contain drop-shadow-xl"
-      />
+      <TabiSprite pose={moodPose[mood]} alt={moodLabel[mood]} className="h-full w-full" />
     </motion.div>
   );
 }

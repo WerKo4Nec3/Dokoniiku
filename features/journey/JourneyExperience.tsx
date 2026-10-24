@@ -1,8 +1,9 @@
 "use client";
 
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
+  ArrowLeft,
   ArrowRight,
   Bike,
   Bookmark,
@@ -17,12 +18,15 @@ import {
   CloudRain,
   ExternalLink,
   Footprints,
-  Globe,
+  Heart,
   House,
+  Images,
   Info,
   LocateFixed,
   MapPin,
+  Minus,
   Moon,
+  Plus,
   RotateCcw,
   Route,
   Share2,
@@ -40,7 +44,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { DEFAULT_START, directions, prefectures } from "@/data/prefectures";
+import { DEFAULT_START, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { getAttractionsByPrefecture } from "@/lib/api/places";
@@ -50,12 +54,14 @@ import {
   saveRecentForUser,
 } from "@/lib/api/savedJourneys";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
-import { readPreferences } from "@/lib/preferences";
+import { openPreferences, readPreferences, usePreferences } from "@/lib/preferences";
 import { encodeTrip } from "@/lib/tripShare";
 import { getExcludedPlaceIds } from "@/lib/api/ratings";
 import { trackSave, trackSearch } from "@/lib/analytics";
 import { PlaceRating } from "@/components/PlaceRating";
 import { AccessCard } from "@/components/AccessCard";
+import { PlaceReviews } from "@/components/PlaceReviews";
+import { GoHereButton } from "@/components/trip/GoHereButton";
 import {
   getDestinationImages,
   getDestinationSummary,
@@ -82,6 +88,7 @@ import {
   allTransportModes,
   bestTransport,
   categoryLabels,
+  directionTowards,
   CURRENT_SEASON,
   estimateBudget,
   estimateTravelTime,
@@ -119,6 +126,11 @@ import {
   CategoryCard,
 } from "@/components/journey/CategoryCard";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
+import { TabiSprite } from "@/features/mascot/TabiSprite";
+import { SceneBackdrop, type ScenePhase } from "@/features/scene/SceneBackdrop";
+import { nextScene, SCENES, sessionScene, type Scene } from "@/features/scene/scenes";
+import { CompassRose } from "./CompassRose";
+import { PrefectureMiniMap } from "./PrefectureMiniMap";
 import { ImageGallery } from "./ImageGallery";
 import {
   FactsCard,
@@ -150,6 +162,7 @@ const ShuffleMap = dynamic(() => import("./ShuffleMap"), {
 
 type Stage =
   | "landing"
+  | "mode"
   | "direction"
   | "prefecture"
   | "shuffle"
@@ -228,14 +241,26 @@ function sampleWithPreference(
   return sampleItems([...pickedLiked, ...pickedRest], count);
 }
 
-// Shared entrance animation: parents stagger their fadeUp children.
+// Result page entrance: blocks stagger in.
 const staggerParent = {
   hidden: {},
   show: { transition: { staggerChildren: 0.08, delayChildren: 0.05 } },
 };
-const fadeUp = {
-  hidden: { opacity: 0, y: 18 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.5, ease: "easeOut" as const } },
+
+// Scene screens: copy drifts up out of a soft blur, one line at a time,
+// once the painting has faded in.
+const heroParent = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.14, delayChildren: 0.45 } },
+};
+const heroItem = {
+  hidden: { opacity: 0, y: 16, filter: "blur(6px)" },
+  show: {
+    opacity: 1,
+    y: 0,
+    filter: "blur(0px)",
+    transition: { duration: 0.9, ease: [0.22, 1, 0.36, 1] as const },
+  },
 };
 
 // Smoothly expands/collapses togglable panels.
@@ -264,60 +289,6 @@ function ExpandPanel({
     </AnimatePresence>
   );
 }
-
-// A big tactile choice tile, used for the landing mode + scope pickers.
-function ChoiceCard({
-  active,
-  onClick,
-  visual,
-  title,
-  subtitle,
-}: {
-  active: boolean;
-  onClick: () => void;
-  visual: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
-  return (
-    <motion.button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      whileHover={{ y: -4 }}
-      whileTap={{ scale: 0.97 }}
-      transition={{ type: "spring", stiffness: 320, damping: 22 }}
-      className={`group relative flex flex-col items-center gap-2.5 rounded-2xl border p-4 text-center transition ${
-        active
-          ? "border-vermilion bg-vermilion/5 shadow-float"
-          : "border-[color:var(--line)] bg-[color:var(--surface)] hover:border-vermilion/50 hover:bg-vermilion/[0.03]"
-      }`}
-    >
-      <span className="grid h-16 w-16 place-items-center rounded-2xl bg-[color:var(--surface-muted)] text-vermilion">
-        {visual}
-      </span>
-      <span className="text-sm font-black text-[color:var(--foreground)]">
-        {title}
-      </span>
-      <span className="-mt-1 text-xs font-medium text-[color:var(--muted)]">
-        {subtitle}
-      </span>
-      <AnimatePresence>
-        {active && (
-          <motion.span
-            initial={{ scale: 0, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            exit={{ scale: 0, opacity: 0 }}
-            className="absolute right-2.5 top-2.5 grid h-6 w-6 place-items-center rounded-full bg-vermilion text-white shadow-sm"
-          >
-            <Check size={14} />
-          </motion.span>
-        )}
-      </AnimatePresence>
-    </motion.button>
-  );
-}
-
 
 // Fill percent (0..100) for a .range-brand slider's --fill.
 function sliderFill(value: number, min: number, max: number): number {
@@ -395,17 +366,6 @@ const SHUFFLE_COUNT = 4;
 // Gemini-powered place insight is optional; the UI only appears when enabled.
 const aiEnabled = process.env.NEXT_PUBLIC_GEMINI_ENABLED === "true";
 
-const directionAngles: Record<Direction, number> = {
-  北: 0,
-  北東: 45,
-  東: 90,
-  南東: 135,
-  南: 180,
-  南西: 225,
-  西: 270,
-  北西: 315,
-};
-
 const reasonTexts = [
   "今日は少しだけ遠くへ。景色が変わると、気分もちゃんと切り替わるよ。",
   "予定を詰めすぎない旅にぴったり。寄り道の時間も残しておこう。",
@@ -447,10 +407,11 @@ function TransportIcon({
 }
 
 export function JourneyExperience() {
-  const reduceMotion = useReducedMotion();
   const [stage, setStage] = useState<Stage>("landing");
   const [direction, setDirection] = useState<Direction | null>(null);
   const [prefecture, setPrefecture] = useState<Prefecture | null>(null);
+  const currentDirection = direction;
+  const currentPrefecture = prefecture;
   const [journey, setJourney] = useState<JourneyResult | null>(null);
   const [selecting, setSelecting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -463,6 +424,10 @@ export function JourneyExperience() {
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
   const [scope, setScope] = useState<"nearby" | "all">("nearby");
   const [people, setPeople] = useState(1);
+  const favourites = usePreferences();
+  // Painted scene behind landing → mode → compass → prefecture.
+  const [scene, setScene] = useState<Scene | null>(null);
+  const [spins, setSpins] = useState(0);
 
   // "Подбор с настройками" (custom) mode.
   const [journeyMode, setJourneyMode] = useState<JourneyMode>("surprise");
@@ -543,6 +508,33 @@ export function JourneyExperience() {
     window.scrollTo({ top: 0, behavior: "auto" });
   }, [stage]);
 
+  // The scene is picked on the client (random per session), then fades in.
+  useEffect(() => {
+    const timer = window.setTimeout(() => setScene(sessionScene()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  const sceneOn =
+    stage === "landing" || stage === "mode" || stage === "direction" || stage === "prefecture";
+  const scenePhase: ScenePhase =
+    stage === "landing" ? "hero" : stage === "mode" ? "menu" : "step";
+
+  // Let the header melt into the scene, and tell CSS which ink it needs.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (sceneOn && scene) {
+      root.dataset.scene = "on";
+      root.dataset.sceneInk = scene.ink;
+    } else {
+      delete root.dataset.scene;
+      delete root.dataset.sceneInk;
+    }
+    return () => {
+      delete root.dataset.scene;
+      delete root.dataset.sceneInk;
+    };
+  }, [sceneOn, scene]);
+
   // Keep the chosen budget within the (headcount-dependent) ceiling.
   useEffect(() => {
     setBudget((current) => Math.min(current, budgetMax));
@@ -585,6 +577,33 @@ export function JourneyExperience() {
       }
     }, 0);
     return () => window.clearTimeout(timer);
+  }, []);
+
+  // A quest-board spot hands a destination over via sessionStorage; run the
+  // usual reveal → result flow for it.
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = sessionStorage.getItem("dokoniiku:plan-destination");
+        if (!raw) return;
+        sessionStorage.removeItem("dokoniiku:plan-destination");
+        const destination = JSON.parse(raw) as Destination;
+        const target = prefectures.find((item) => item.id === destination?.prefectureId);
+        if (!destination?.name || !target) return;
+        const towards = directionTowards(start, destination);
+        setDirection(towards);
+        setPrefecture(target);
+        void finalizePlan({ destination, transport: "train" }, false, undefined, {
+          direction: towards,
+          prefecture: target,
+        });
+      } catch {
+        // corrupt hand-off — stay on the landing
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // Runs once on arrival; finalizePlan/start are read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // On sign-in, load the account's recent history and merge in any local
@@ -668,6 +687,7 @@ export function JourneyExperience() {
       ?.maxOneWayMinutes ?? 180;
 
   function beginDirectionSelection() {
+    setSpins((count) => count + 1);
     setStage("direction");
     setDirection(null);
     setPrefecture(null);
@@ -790,7 +810,12 @@ export function JourneyExperience() {
     plan: Plan,
     providerMock: boolean,
     placesNotice?: string,
+    // Explicit context for hand-offs (e.g. a quest spot) that start a trip
+    // before the direction/prefecture state has caught up.
+    context?: { direction: Direction; prefecture: Prefecture },
   ) {
+    const direction = context?.direction ?? currentDirection;
+    const prefecture = context?.prefecture ?? currentPrefecture;
     if (!direction || !prefecture) return;
     setStage("loading");
     setRevealTarget({
@@ -810,8 +835,8 @@ export function JourneyExperience() {
 
     const [weather, summary, gallery, commons, openverse] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
-      getDestinationSummary(picked.name),
-      getDestinationImages(picked.name),
+      getDestinationSummary(picked.wikiTitle ?? picked.name),
+      getDestinationImages(picked.wikiTitle ?? picked.name),
       searchCommonsPhotos(`${picked.name} ${prefecture.nameJa}`),
       getOpenversePhotos(`${picked.name} ${prefecture.nameJa}`),
     ]);
@@ -1293,294 +1318,322 @@ export function JourneyExperience() {
   );
 
   return (
+    <>
+    <AnimatePresence>
+      {sceneOn && scene && (
+        <SceneBackdrop key="scene" scene={scene} phase={scenePhase} />
+      )}
+    </AnimatePresence>
     <AnimatePresence mode="wait">
       {stage === "landing" && (
         <motion.section
           key="landing"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          exit={{ opacity: 0, y: -16 }}
-          className="hero-image relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden pt-16"
+          exit={{ opacity: 0, transition: { duration: 0.35 } }}
+          className="relative z-10 flex min-h-[100svh] flex-col px-6 pb-10 pt-28 sm:px-10 md:justify-center md:pt-16 lg:px-20"
         >
           <motion.div
-            variants={staggerParent}
+            variants={heroParent}
             initial="hidden"
             animate="show"
-            className="mx-auto flex w-full max-w-2xl flex-col items-center px-5 py-12 text-center sm:px-6 md:py-20"
+            className="scene-copy mx-auto w-full max-w-6xl"
           >
-            <motion.div
-              variants={fadeUp}
-              className="relative mb-2 flex justify-center"
-            >
-              <span className="pointer-events-none absolute inset-0 -z-10 mx-auto h-40 w-40 rounded-full bg-sun/20 blur-3xl" />
-              <TabiMascot mood="idle" />
-            </motion.div>
-            <motion.div
-              variants={fadeUp}
-              className="mb-4 flex items-center justify-center gap-2 text-sm font-bold text-forest dark:text-forest-ink"
-            >
-              <span className="h-px w-8 bg-current" />
-              WEEKEND TRIP SELECTOR
-              <span className="h-px w-8 bg-current" />
-            </motion.div>
-            <motion.h1
-              variants={fadeUp}
-              className="text-5xl font-black leading-[1.08] text-[color:var(--foreground)] sm:text-6xl"
-            >
-              旅コンパス
-              <span className="mt-3 block text-xl font-semibold text-[color:var(--muted)] sm:text-2xl">
-                Dokoniiku
-              </span>
-            </motion.h1>
-            <motion.p
-              variants={fadeUp}
-              className="mt-6 max-w-md text-base font-medium leading-8 text-[color:var(--muted)] sm:text-lg"
-            >
-              次の休日、どこへ行く？
-              <br />
-              旅の精タビに、方角から目的地まで任せよう。
-            </motion.p>
-            <motion.div
-              variants={fadeUp}
-              className="mt-8 w-full sm:w-auto"
-              whileHover={{ scale: 1.03 }}
-              whileTap={{ scale: 0.97 }}
-            >
-              <motion.div
-                animate={reduceMotion ? undefined : { scale: [1, 1.02, 1] }}
-                transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}
+            <div className="max-w-xl">
+              <motion.h1
+                variants={heroItem}
+                className="font-display text-[clamp(2.3rem,6.2vw,4.4rem)] font-normal leading-[1.42] tracking-[0.14em] text-[color:var(--foreground)]"
               >
-                <ActionButton
-                  onClick={beginDirectionSelection}
-                  icon={<Sparkles size={18} />}
-                  className="w-full shadow-float sm:w-auto"
+                次の休日、
+                <br />
+                どこに行く？
+              </motion.h1>
+              <motion.p
+                variants={heroItem}
+                className="mt-4 text-sm font-bold tracking-[0.24em] text-[color:var(--muted)] sm:text-base"
+              >
+                まだ見ぬ日本に、出会おう。
+              </motion.p>
+              <motion.div variants={heroItem} className="mt-10">
+                <motion.button
+                  type="button"
+                  onClick={() => setStage("mode")}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="scene-cta group"
                 >
-                  旅をはじめる
-                </ActionButton>
+                  旅先を決める
+                  <ArrowRight size={18} className="transition group-hover:translate-x-1" />
+                </motion.button>
               </motion.div>
-            </motion.div>
+              <motion.div
+                variants={heroItem}
+                className="scene-glass mt-12 inline-flex items-center gap-3 rounded-full py-1.5 pl-5 pr-1.5"
+              >
+                <span className="mr-1 text-xs font-bold tracking-[0.22em] text-[color:var(--muted)]">
+                  人数
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPeople((n) => Math.max(1, n - 1))}
+                  disabled={people <= 1}
+                  aria-label="人数を減らす"
+                  className="scene-round"
+                >
+                  <Minus size={16} />
+                </button>
+                <span className="relative grid w-8 place-items-center overflow-hidden text-2xl font-medium tabular-nums text-[color:var(--foreground)]">
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={people}
+                      initial={{ y: 10, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -10, opacity: 0 }}
+                    >
+                      {people}
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPeople((n) => Math.min(20, n + 1))}
+                  disabled={people >= 20}
+                  aria-label="人数を増やす"
+                  className="scene-round"
+                >
+                  <Plus size={16} />
+                </button>
+              </motion.div>
+            </div>
+          </motion.div>
 
-            <motion.div
-              variants={fadeUp}
-              className="mt-6 flex w-full flex-col items-center gap-3"
+          {scene && SCENES.length > 1 && (
+            <motion.button
+              type="button"
+              onClick={() => setScene((current) => (current ? nextScene(current) : current))}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { delay: 1.6 } }}
+              className="scene-glass absolute bottom-6 right-6 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-bold text-[color:var(--foreground)]"
             >
+              <Images size={14} />
+              {scene.nameJa}
+            </motion.button>
+          )}
+        </motion.section>
+      )}
+
+      {stage === "mode" && (
+        <motion.section
+          key="mode"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.3 } }}
+          className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 pb-12 pt-24 sm:px-8"
+        >
+          <motion.div variants={heroParent} initial="hidden" animate="show">
+            <motion.button
+              type="button"
+              variants={heroItem}
+              onClick={() => setStage("landing")}
+              className="scene-copy inline-flex items-center gap-1.5 text-xs font-bold tracking-[0.18em] text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+            >
+              <ArrowLeft size={14} />
+              もどる
+            </motion.button>
+            <motion.h2
+              variants={heroItem}
+              className="scene-copy mt-4 font-display text-[clamp(1.8rem,4vw,2.75rem)] font-normal tracking-[0.14em] text-[color:var(--foreground)]"
+            >
+              どうやって決める？
+            </motion.h2>
+            <motion.div variants={heroItem} className="mt-4 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setStartPickerOpen((open) => !open)}
-                className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                className="scene-glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-[color:var(--foreground)]"
               >
-                <MapPin size={14} />
-                出発地点: {start.name}
+                <MapPin size={13} className="text-vermilion" />
+                出発: {start.name}
+                <ChevronRight
+                  size={13}
+                  className={`text-[color:var(--muted)] transition ${startPickerOpen ? "rotate-90" : ""}`}
+                />
               </button>
+              <span className="scene-glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-[color:var(--foreground)]">
+                <Users size={13} className="text-vermilion" />
+                {people}名
+              </span>
+              {/* Optional: favourite genres nudge the random pick. */}
+              <button
+                type="button"
+                onClick={openPreferences}
+                className="scene-glass inline-flex items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-[color:var(--foreground)]"
+              >
+                <Heart size={13} className="text-vermilion" />
+                {favourites.length
+                  ? favourites.map((category) => categoryLabels[category]).join("・")
+                  : "好きなジャンル（任意）"}
+                <ChevronRight size={13} className="text-[color:var(--muted)]" />
+              </button>
+            </motion.div>
 
-              <ExpandPanel open={startPickerOpen} className="max-w-md">
-                <div className="w-full rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-4">
+            <ExpandPanel open={startPickerOpen} className="max-w-md">
+              <div className="scene-glass mt-3 w-full rounded-2xl p-4">
+                <button
+                  type="button"
+                  onClick={useCurrentLocation}
+                  disabled={locating}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-forest/10 px-4 py-2.5 text-sm font-bold text-forest transition hover:bg-forest/15 disabled:opacity-60 dark:bg-forest-ink/10 dark:text-forest-ink"
+                >
+                  <LocateFixed size={16} />
+                  {locating ? "現在地を取得中…" : "現在地を使う"}
+                </button>
+                {locationError && (
+                  <p className="mt-2 text-xs font-medium text-[color:var(--brand-ink)]">
+                    {locationError}
+                  </p>
+                )}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {startPointPresets.map((point) => (
+                    <button
+                      key={point.name}
+                      type="button"
+                      onClick={() => chooseStart(point)}
+                      className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                        start.name === point.name
+                          ? "border-vermilion bg-vermilion/10 text-vermilion"
+                          : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                      }`}
+                    >
+                      {point.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </ExpandPanel>
+
+            <div className="mt-7 grid gap-4 md:grid-cols-2">
+              <motion.div variants={heroItem} className="scene-glass relative overflow-hidden rounded-[28px] p-6 sm:p-7">
+                <TabiSprite
+                  pose="camera"
+                  className="pointer-events-none absolute -right-4 -top-2 aspect-[538/422] w-32 sm:w-36"
+                />
+                <p className="text-[11px] font-bold tracking-[0.3em] text-vermilion">OMAKASE</p>
+                <h3 className="mt-2 font-display text-2xl font-bold tracking-[0.08em] text-[color:var(--foreground)]">
+                  タビにおまかせ
+                </h3>
+                <p className="mt-2 max-w-[15rem] text-sm leading-6 text-[color:var(--muted)]">
+                  方角も、行き先も。ぜんぶタビが決めるよ。
+                </p>
+                <div className="mt-5 inline-flex rounded-full bg-[color:var(--surface-muted)] p-1 text-xs font-bold">
+                  {(
+                    [
+                      ["nearby", "近場", "日帰り圏"],
+                      ["all", "全国", "47都道府県"],
+                    ] as const
+                  ).map(([id, label, sub]) => (
+                    <button
+                      key={id}
+                      type="button"
+                      aria-pressed={scope === id}
+                      onClick={() => setScope(id)}
+                      className={`relative rounded-full px-4 py-2 transition ${
+                        scope === id
+                          ? "text-[color:var(--foreground)]"
+                          : "text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                      }`}
+                    >
+                      {scope === id && (
+                        <motion.span
+                          layoutId="scope-pill"
+                          className="absolute inset-0 rounded-full bg-[color:var(--surface)] shadow-sm"
+                          transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                        />
+                      )}
+                      <span className="relative">
+                        {label}
+                        <span className="ml-1 font-medium opacity-70">{sub}</span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-6">
                   <button
                     type="button"
-                    onClick={useCurrentLocation}
-                    disabled={locating}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-forest/10 px-4 py-2.5 text-sm font-bold text-forest transition hover:bg-forest/15 disabled:opacity-60 dark:bg-forest-ink/10 dark:text-forest-ink"
+                    onClick={() => {
+                      setJourneyMode("surprise");
+                      beginDirectionSelection();
+                    }}
+                    className="scene-cta group"
                   >
-                    <LocateFixed size={16} />
-                    {locating ? "現在地を取得中…" : "現在地を使う"}
+                    このまま出発
+                    <ArrowRight size={17} className="transition group-hover:translate-x-1" />
                   </button>
-                  {locationError && (
-                    <p className="mt-2 text-xs font-medium text-[color:var(--brand-ink)]">
-                      {locationError}
-                    </p>
-                  )}
-                  <p className="mt-4 text-xs font-bold text-[color:var(--muted)]">
-                    またはリストから選ぶ
-                  </p>
-                  <div className="mt-2 flex flex-wrap justify-center gap-2">
-                    {startPointPresets.map((point) => (
-                      <button
-                        key={point.name}
-                        type="button"
-                        onClick={() => chooseStart(point)}
-                        className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
-                          start.name === point.name
-                            ? "border-vermilion bg-vermilion/10 text-vermilion"
-                            : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                        }`}
-                      >
-                        {point.name}
-                      </button>
-                    ))}
-                  </div>
                 </div>
-              </ExpandPanel>
-            </motion.div>
-
-            <motion.div variants={fadeUp} className="mt-4 w-full max-w-md">
-              <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-5 shadow-float">
-                <div className="flex items-center justify-between">
-                  <span className="inline-flex items-center gap-2 text-xs font-bold text-[color:var(--muted)]">
-                    <Users size={15} /> 人数
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    {Array.from({ length: Math.min(people, 6) }).map((_, i) => (
-                      <motion.span
-                        key={i}
-                        initial={{ scale: 0 }}
-                        animate={{ scale: 1 }}
-                        className="h-2 w-2 rounded-full bg-vermilion"
-                      />
-                    ))}
-                    {people > 6 && (
-                      <span className="text-[10px] font-black text-vermilion">
-                        +{people - 6}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mt-3 flex items-center justify-center gap-6">
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setPeople((n) => Math.max(1, n - 1))}
-                    disabled={people <= 1}
-                    aria-label="人数を減らす"
-                    className="grid h-11 w-11 place-items-center rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] text-xl font-black text-[color:var(--foreground)] transition hover:border-vermilion hover:text-vermilion disabled:opacity-40"
-                  >
-                    −
-                  </motion.button>
-                  <div className="flex min-w-[3.5rem] flex-col items-center">
-                    <AnimatePresence mode="popLayout">
-                      <motion.span
-                        key={people}
-                        initial={{ y: 8, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        exit={{ y: -8, opacity: 0 }}
-                        className="text-4xl font-black tabular-nums text-[color:var(--foreground)]"
-                      >
-                        {people}
-                      </motion.span>
-                    </AnimatePresence>
-                    <span className="text-[11px] font-bold text-[color:var(--muted)]">
-                      名
-                    </span>
-                  </div>
-                  <motion.button
-                    type="button"
-                    whileTap={{ scale: 0.85 }}
-                    onClick={() => setPeople((n) => Math.min(20, n + 1))}
-                    disabled={people >= 20}
-                    aria-label="人数を増やす"
-                    className="grid h-11 w-11 place-items-center rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] text-xl font-black text-[color:var(--foreground)] transition hover:border-vermilion hover:text-vermilion disabled:opacity-40"
-                  >
-                    +
-                  </motion.button>
-                </div>
-
-              </div>
-            </motion.div>
-
-            <motion.div variants={fadeUp} className="mt-8 w-full max-w-md">
-              <p className="mb-2 text-left text-xs font-bold text-[color:var(--muted)]">
-                さがし方
-              </p>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ChoiceCard
-                  active={journeyMode === "surprise"}
-                  onClick={() => setJourneyMode("surprise")}
-                  visual={
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src="/mascot/camera.png"
-                      alt=""
-                      className="h-12 w-12 object-contain"
-                    />
-                  }
-                  title="驚かせて"
-                  subtitle="タビにおまかせ"
-                />
-                <ChoiceCard
-                  active={journeyMode === "custom"}
-                  onClick={() => setJourneyMode("custom")}
-                  visual={
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src="/mascot/map.png"
-                      alt=""
-                      className="h-12 w-12 object-contain"
-                    />
-                  }
-                  title="設定して探す"
-                  subtitle="予算・距離で絞る"
-                />
-              </div>
-            </motion.div>
-
-            {journeyMode === "surprise" ? (
-              <motion.div
-                key="surprise-settings"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex w-full flex-col items-center"
-              >
-                <div className="mt-4 grid w-full max-w-md gap-3 sm:grid-cols-2">
-                  <ChoiceCard
-                    active={scope === "nearby"}
-                    onClick={() => setScope("nearby")}
-                    visual={<Footprints size={26} />}
-                    title="近場で探す"
-                    subtitle="日帰りで行ける範囲"
-                  />
-                  <ChoiceCard
-                    active={scope === "all"}
-                    onClick={() => setScope("all")}
-                    visual={<Globe size={26} />}
-                    title="全国から探す"
-                    subtitle="47都道府県から"
-                  />
-                </div>
-                <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
-                  {scope === "nearby"
-                    ? "出発地から日帰りで行ける範囲で、行き先をランダムに提案します"
-                    : "全国47都道府県から、行き先をランダムに提案します"}
-                </p>
               </motion.div>
-            ) : (
+
               <motion.div
-                key="custom-settings"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex w-full flex-col items-center"
+                variants={heroItem}
+                className={`scene-glass relative overflow-hidden rounded-[28px] p-6 transition sm:p-7 ${
+                  journeyMode === "custom" ? "ring-2 ring-vermilion/60" : ""
+                }`}
               >
-                <div className="mt-4 w-full max-w-md">{customKnobs}</div>
-                <p className="mt-4 text-xs font-medium text-[color:var(--muted)]">
-                  予算・時間・距離・移動手段に合う行き先だけを提案します
+                <TabiSprite
+                  pose="map"
+                  className="pointer-events-none absolute -right-4 -top-2 aspect-[538/422] w-32 sm:w-36"
+                />
+                <p className="text-[11px] font-bold tracking-[0.3em] text-vermilion">KODAWARI</p>
+                <h3 className="mt-2 font-display text-2xl font-bold tracking-[0.08em] text-[color:var(--foreground)]">
+                  こだわって探す
+                </h3>
+                <p className="mt-2 max-w-[15rem] text-sm leading-6 text-[color:var(--muted)]">
+                  予算・日数・距離・移動手段から、条件に合う場所だけ。
                 </p>
+                <div className="mt-6">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setJourneyMode((mode) => (mode === "custom" ? "surprise" : "custom"))
+                    }
+                    aria-expanded={journeyMode === "custom"}
+                    className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-6 py-3.5 text-sm font-bold tracking-[0.12em] text-[color:var(--foreground)] transition hover:border-vermilion/60"
+                  >
+                    <SlidersHorizontal size={16} className="text-vermilion" />
+                    {journeyMode === "custom" ? "条件を閉じる" : "条件を決める"}
+                  </button>
+                </div>
               </motion.div>
-            )}
+            </div>
+
+            <ExpandPanel open={journeyMode === "custom"}>
+              <div className="scene-glass mt-4 rounded-[28px] p-4 sm:p-6">
+                {customKnobs}
+                <div className="mt-5 flex justify-end">
+                  <button type="button" onClick={beginDirectionSelection} className="scene-cta group">
+                    この条件で出発
+                    <ArrowRight size={17} className="transition group-hover:translate-x-1" />
+                  </button>
+                </div>
+              </div>
+            </ExpandPanel>
 
             {recentJourneys.length > 0 && (
-              <motion.div variants={fadeUp} className="mt-8 w-full max-w-md text-left">
-                <p className="text-xs font-bold text-[color:var(--muted)]">
+              <motion.div variants={heroItem} className="mt-7">
+                <p className="scene-copy text-[11px] font-bold tracking-[0.22em] text-[color:var(--muted)]">
                   最近の行き先
                 </p>
-                <div className="mt-2 flex flex-col gap-2">
+                <div className="no-scrollbar mt-2 flex gap-2 overflow-x-auto pb-1">
                   {recentJourneys.map((item) => (
                     <button
                       key={item.id}
                       type="button"
                       onClick={() => viewRecent(item)}
-                      className="flex items-center justify-between gap-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2.5 text-left transition hover:border-vermilion/50"
+                      className="scene-glass inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-bold text-[color:var(--foreground)] transition hover:-translate-y-0.5"
                     >
-                      <span className="min-w-0">
-                        <span className="block truncate text-sm font-bold">
-                          {item.destination.name}
-                        </span>
-                        <span className="block text-xs text-[color:var(--muted)]">
-                          {item.prefecture.nameJa} ・ {item.distanceKm}km
-                        </span>
+                      {item.destination.name}
+                      <span className="font-medium text-[color:var(--muted)]">
+                        {item.prefecture.nameJa}
                       </span>
-                      <ChevronRight
-                        size={16}
-                        className="shrink-0 text-[color:var(--muted)]"
-                      />
                     </button>
                   ))}
                 </div>
@@ -1596,104 +1649,76 @@ export function JourneyExperience() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -18 }}
-          className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-4xl flex-col justify-center px-5 py-24 sm:px-6"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 pb-12 pt-24 sm:px-8"
         >
-          <div className="mt-12 grid items-center gap-10 md:grid-cols-2">
+          <div className="scene-glass grid items-center gap-8 rounded-[32px] p-6 sm:p-10 md:grid-cols-[1.05fr_1fr]">
             <motion.div
-              initial={{ opacity: 0, scale: 0.88 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative mx-auto grid h-72 w-72 place-items-center"
+              initial={{ opacity: 0, scale: 0.9, rotate: -10 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              transition={{ type: "spring", stiffness: 150, damping: 18 }}
+              className="mx-auto w-full max-w-[22rem]"
             >
-              <div className="absolute inset-0 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] shadow-float" />
-              {directions.map((item) => {
-                const angle = directionAngles[item];
-                return (
-                  <span
-                    key={item}
-                    className={`absolute text-sm font-bold transition ${
-                      direction === item
-                        ? "text-vermilion"
-                        : "text-[color:var(--muted)]"
-                    }`}
-                    style={{
-                      transform: `rotate(${angle}deg) translateY(-116px) rotate(-${angle}deg)`,
-                    }}
-                  >
-                    {item}
-                  </span>
-                );
-              })}
-              <motion.div
-                animate={
-                  selecting
-                    ? { rotate: 1080 }
-                    : { rotate: direction ? directionAngles[direction] : 0 }
-                }
-                transition={{
-                  duration: selecting ? 1.35 : 0.5,
-                  ease: selecting ? "easeInOut" : "backOut",
-                }}
-                className="absolute bottom-1/2 left-1/2 h-20 w-2 -ml-1 origin-bottom rounded-full bg-vermilion"
-              >
-                <span className="absolute -left-2 -top-2 h-5 w-5 rotate-45 bg-vermilion" />
-              </motion.div>
-              <div className="z-10 grid h-16 w-16 place-items-center rounded-full border-4 border-[color:var(--surface)] bg-forest text-white shadow-lg">
-                <Sparkles size={22} />
-              </div>
+              <CompassRose direction={direction} spinning={selecting} spins={spins} />
             </motion.div>
 
             <div className="text-center md:text-left">
               <div className="flex justify-center md:justify-start">
-                <TabiMascot
-                  mood={selecting ? "thinking" : "reveal"}
-                  size="medium"
-                />
+                <TabiMascot mood={selecting ? "thinking" : "reveal"} size="small" />
               </div>
-              <p className="mt-5 text-sm font-bold text-vermilion">
-                STEP 01 / DIRECTION
+              <p className="mt-4 text-[11px] font-bold tracking-[0.3em] text-vermilion">
+                STEP 01 ・ 方角
               </p>
-              <h2 className="mt-2 text-3xl font-black sm:text-4xl">
-                {selecting
-                  ? "タビが風を読んでいます…"
-                  : `今日は「${direction}」へ！`}
-              </h2>
-              <p className="mt-4 leading-7 text-[color:var(--muted)]">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.h2
+                  key={selecting ? "spin" : direction ?? ""}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  className="mt-3 font-display text-3xl font-bold tracking-[0.08em] sm:text-4xl"
+                >
+                  {selecting ? "タビが風を読んでいます…" : `今日は「${direction}」へ！`}
+                </motion.h2>
+              </AnimatePresence>
+              <p className="mt-4 text-sm leading-7 text-[color:var(--muted)]">
                 {selecting
                   ? "どの方角になるかは、タビだけが知っています。"
                   : "この先にある都道府県から、次の行き先を選びます。"}
               </p>
-              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
-                <ActionButton
+              <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center md:justify-start">
+                <button
+                  type="button"
                   onClick={choosePrefecture}
                   disabled={selecting || !direction}
-                  icon={<ArrowRight size={18} />}
-                  className="w-full sm:w-auto"
+                  className="scene-cta group justify-center"
                 >
                   この方角へ進む
-                </ActionButton>
-                <ActionButton
-                  variant="secondary"
+                  <ArrowRight size={17} className="transition group-hover:translate-x-1" />
+                </button>
+                <button
+                  type="button"
                   onClick={beginDirectionSelection}
                   disabled={selecting}
-                  icon={
-                    <motion.span
-                      className="inline-flex"
-                      animate={selecting ? { rotate: -360 } : { rotate: 0 }}
-                      transition={{
-                        duration: 1,
-                        repeat: selecting ? Infinity : 0,
-                        ease: "linear",
-                      }}
-                    >
-                      <RotateCcw size={17} />
-                    </motion.span>
-                  }
-                  className="w-full sm:w-auto"
+                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-6 py-3.5 text-sm font-bold text-[color:var(--foreground)] transition hover:border-vermilion/60 disabled:opacity-50"
                 >
+                  <motion.span
+                    className="inline-flex"
+                    animate={selecting ? { rotate: -360 } : { rotate: 0 }}
+                    transition={{ duration: 1, repeat: selecting ? Infinity : 0, ease: "linear" }}
+                  >
+                    <RotateCcw size={16} />
+                  </motion.span>
                   {selecting ? "回しています…" : "もう一度回す"}
-                </ActionButton>
+                </button>
               </div>
+              <button
+                type="button"
+                onClick={() => setStage("mode")}
+                className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+              >
+                <ArrowLeft size={13} />
+                選び方に戻る
+              </button>
             </div>
           </div>
         </motion.section>
@@ -1705,88 +1730,97 @@ export function JourneyExperience() {
           initial={{ opacity: 0, y: 18 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -18 }}
-          className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-2xl flex-col justify-center px-5 py-24 sm:px-6"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="relative z-10 mx-auto flex min-h-[100svh] w-full max-w-5xl flex-col justify-center px-5 pb-12 pt-24 sm:px-8"
         >
-          <div className="mt-10 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float sm:p-10">
-            <div className="flex items-center justify-between gap-4">
-              <p className="text-sm font-bold text-vermilion">
-                STEP 02 / PREFECTURE
-              </p>
-              <span
-                className="rounded-full px-3 py-1 text-xs font-bold text-white"
-                style={{ backgroundColor: prefecture.accent }}
-              >
-                {prefecture.region}
-              </span>
-            </div>
-            <div className="mt-8 flex items-end gap-3">
-              <h2 className="text-4xl font-black sm:text-5xl">{prefecture.nameJa}</h2>
-              <p className="pb-1 text-sm font-bold text-[color:var(--muted)]">
-                {prefecture.nameEn}
-              </p>
-            </div>
-            <p className="mt-5 max-w-md text-base font-medium leading-8 text-[color:var(--muted)]">
-              {prefecture.shortDescriptionJa}
-            </p>
-            <div className="mt-8 flex items-center gap-4 border-t border-[color:var(--line)] pt-6">
-              <TabiMascot mood="reveal" size="medium" />
-              <p className="text-sm font-medium leading-7">
-                「{direction}」の風が、ここまで連れてきたよ。
-                <br />
-                次は本当の目的地を探そう。
-              </p>
-            </div>
-
-            {filterPanel}
-
-            {filterNotice && (
-              <div className="mt-5 flex items-start gap-2 rounded-lg border border-vermilion/40 bg-vermilion/10 px-4 py-3 text-xs font-medium leading-5">
-                <Info size={16} className="mt-0.5 shrink-0 text-vermilion" />
-                <span>{filterNotice}</span>
+          <div className="scene-glass overflow-hidden rounded-[32px]">
+            <div className="grid md:grid-cols-[0.9fr_1.1fr]">
+              <div className="relative aspect-[4/3] border-b border-[color:var(--line)] bg-[color:color-mix(in_srgb,var(--surface-muted)_55%,transparent)] md:aspect-auto md:min-h-[28rem] md:border-b-0 md:border-r">
+                <PrefectureMiniMap id={prefecture.id} accent={prefecture.accent} />
+                <span
+                  className="absolute left-4 top-4 rounded-full px-3 py-1 text-xs font-bold text-white shadow-sm"
+                  style={{ backgroundColor: prefecture.accent }}
+                >
+                  {prefecture.region}
+                </span>
               </div>
-            )}
 
-            {journeyMode === "custom" && (
-              <div className="mt-6 border-t border-[color:var(--line)] pt-6">
+              <div className="p-6 sm:p-10">
+                <p className="text-[11px] font-bold tracking-[0.3em] text-vermilion">
+                  STEP 02 ・ 都道府県
+                </p>
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35, duration: 0.6 }}
+                  className="mt-4 flex flex-wrap items-end gap-x-3 gap-y-1"
+                >
+                  <h2 className="font-display text-5xl font-bold tracking-[0.1em] sm:text-6xl">
+                    {prefecture.nameJa}
+                  </h2>
+                  <p className="pb-2 text-xs font-bold tracking-[0.24em] text-[color:var(--muted)]">
+                    {prefecture.nameEn.toUpperCase()}
+                  </p>
+                </motion.div>
+                <p className="mt-5 max-w-md text-sm font-medium leading-8 text-[color:var(--muted)]">
+                  {prefecture.shortDescriptionJa}
+                </p>
+                <div className="mt-6 flex items-center gap-3 rounded-2xl bg-[color:var(--surface-muted)] p-3 pr-4">
+                  <TabiSprite pose="pointing" shadow={false} effects={false} className="aspect-[538/422] w-16 shrink-0" />
+                  <p className="text-sm font-medium leading-6">
+                    「{direction}」の風が、ここまで連れてきたよ。次は本当の目的地を探そう。
+                  </p>
+                </div>
+
+                {filterPanel}
+
+                {filterNotice && (
+                  <div className="mt-5 flex items-start gap-2 rounded-2xl border border-vermilion/40 bg-vermilion/10 px-4 py-3 text-xs font-medium leading-5">
+                    <Info size={16} className="mt-0.5 shrink-0 text-vermilion" />
+                    <span>{filterNotice}</span>
+                  </div>
+                )}
+
+                {journeyMode === "custom" && (
+                  <div className="mt-6 border-t border-[color:var(--line)] pt-6">
+                    <button
+                      type="button"
+                      onClick={() => setSettingsOpen((open) => !open)}
+                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                    >
+                      <SlidersHorizontal size={14} />
+                      予算・距離・時間・移動手段を調整
+                    </button>
+                    <ExpandPanel open={settingsOpen}>
+                      <div className="mt-3">{customKnobs}</div>
+                    </ExpandPanel>
+                  </div>
+                )}
+
+                <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <button type="button" onClick={chooseDestination} className="scene-cta group justify-center">
+                    <Sparkles size={17} />
+                    目的地を決める
+                  </button>
+                  <button
+                    type="button"
+                    onClick={startShuffle}
+                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-6 py-3.5 text-sm font-bold text-[color:var(--foreground)] transition hover:border-vermilion/60"
+                  >
+                    <Shuffle size={16} />
+                    4つの候補から選ぶ
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setSettingsOpen((open) => !open)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                  onClick={returnToStart}
+                  className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
                 >
-                  <SlidersHorizontal size={14} />
-                  予算・距離・時間・移動手段を調整
+                  <House size={13} />
+                  メインに戻る
                 </button>
-                <ExpandPanel open={settingsOpen}>
-                  <div className="mt-3">{customKnobs}</div>
-                </ExpandPanel>
               </div>
-            )}
-
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <ActionButton
-                onClick={chooseDestination}
-                icon={<Sparkles size={18} />}
-                className="w-full sm:w-auto"
-              >
-                目的地を決める
-              </ActionButton>
-              <ActionButton
-                variant="ghost"
-                onClick={startShuffle}
-                icon={<Shuffle size={17} />}
-                className="w-full sm:w-auto"
-              >
-                4つの候補から選ぶ
-              </ActionButton>
             </div>
-            <button
-              type="button"
-              onClick={returnToStart}
-              className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
-            >
-              <House size={13} />
-              メインに戻る
-            </button>
           </div>
         </motion.section>
       )}
@@ -1980,49 +2014,69 @@ export function JourneyExperience() {
           animate={{ opacity: 1, y: 0 }}
           className="mx-auto min-h-[calc(100vh-4rem)] max-w-6xl px-4 py-24 sm:px-6"
         >
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <p className="text-sm font-bold text-vermilion">
-                TABI&apos;S PICK / 週末の行き先
-              </p>
-              <h2 className="mt-2 text-3xl font-black sm:text-5xl">
-                {journey.destination.name}
-              </h2>
-              <p className="mt-2 flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)]">
-                <MapPin size={16} />
-                {journey.prefecture.nameJa} ・ {journey.distanceKm}km
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <DifficultyBadge
-                difficulty={journeyDifficulty(
-                  journey.distanceKm,
-                  journey.estimatedTravelTime,
-                )}
-              />
-              {isSeasonalMatch(journey.destination.categories) && (
-                <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#816106] dark:text-sun">
-                  {seasonInfo[CURRENT_SEASON].emoji}{" "}
-                  {seasonInfo[CURRENT_SEASON].labelJa}のおすすめ
-                </span>
-              )}
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-vermilion/10 px-3 py-1.5 text-xs font-bold text-vermilion">
-                <TransportIcon mode={journey.transport} size={14} />
-                {transportLabel(journey.transport, journey.transfer)}
-              </span>
-              {journey.destination.categories.map((category) => (
-                <span
-                  key={category}
-                  className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
-                >
-                  {categoryLabels[category]}
-                </span>
-              ))}
+          <div className="relative overflow-clip rounded-[32px] border border-[color:var(--line)] bg-[color:var(--surface)] p-6 shadow-float sm:p-8">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full bg-vermilion/10 blur-3xl"
+            />
+            <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+              <div className="min-w-0">
+                <p className="text-[11px] font-bold tracking-[0.3em] text-vermilion">
+                  TABI&apos;S PICK ・ 週末の行き先
+                </p>
+                <h2 className="mt-3 font-display text-4xl font-bold leading-tight tracking-[0.05em] sm:text-5xl">
+                  {journey.destination.name}
+                </h2>
+                <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-bold text-[color:var(--muted)]">
+                  <span className="inline-flex items-center gap-1.5">
+                    <MapPin size={15} />
+                    {journey.prefecture.nameJa} ・ {journey.distanceKm}km
+                  </span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <TransportIcon mode={journey.transport} size={15} />
+                    片道{formatMinutes(journey.estimatedTravelTime)}
+                  </span>
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <DifficultyBadge
+                    difficulty={journeyDifficulty(
+                      journey.distanceKm,
+                      journey.estimatedTravelTime,
+                    )}
+                  />
+                  {isSeasonalMatch(journey.destination.categories) && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-sun/20 px-3 py-1.5 text-xs font-bold text-[#816106] dark:text-sun">
+                      {seasonInfo[CURRENT_SEASON].emoji}{" "}
+                      {seasonInfo[CURRENT_SEASON].labelJa}のおすすめ
+                    </span>
+                  )}
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-vermilion/10 px-3 py-1.5 text-xs font-bold text-vermilion">
+                    <TransportIcon mode={journey.transport} size={14} />
+                    {transportLabel(journey.transport, journey.transfer)}
+                  </span>
+                  {journey.destination.categories.map((category) => (
+                    <span
+                      key={category}
+                      className="rounded-full bg-forest/10 px-3 py-1.5 text-xs font-bold text-forest dark:bg-forest-ink/10 dark:text-forest-ink"
+                    >
+                      {categoryLabels[category]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <div className="shrink-0">
+                <GoHereButton
+                  journey={journey}
+                  onStarted={() => {
+                    if (user) setSavedJourneyId(journey.id);
+                  }}
+                />
+              </div>
             </div>
           </div>
 
           {notice && (
-            <div className="mt-5 flex items-start gap-2 rounded-lg border border-sun/40 bg-sun/10 px-4 py-3 text-xs font-medium leading-5">
+            <div className="mt-5 flex items-start gap-2 rounded-2xl border border-sun/40 bg-sun/10 px-4 py-3 text-xs font-medium leading-5">
               <Info size={16} className="mt-0.5 shrink-0 text-[#9b7418]" />
               <span>{notice}</span>
             </div>
@@ -2077,7 +2131,7 @@ export function JourneyExperience() {
                 （各画像の著作権は投稿者に帰属します）
               </p>
 
-              <div className="order-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-6 lg:order-none">
+              <div className="order-2 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-6 lg:order-none">
                 <h3 className="text-sm font-black">この場所について</h3>
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
@@ -2187,7 +2241,7 @@ export function JourneyExperience() {
                 longitude={journey.destination.longitude}
               />
 
-              <div className="order-12 min-w-0 overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] lg:order-none">
+              <div className="order-12 min-w-0 overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] lg:order-none">
                 <PlaceMap
                   key={journey.destination.id}
                   latitude={journey.destination.latitude}
@@ -2207,7 +2261,7 @@ export function JourneyExperience() {
                 </div>
               </div>
 
-              <div className="order-12 flex flex-col gap-4 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
+              <div className="order-12 flex flex-col gap-4 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-forest/10 text-forest dark:bg-forest-ink/10 dark:text-forest-ink">
                     <MapPin size={20} />
@@ -2225,7 +2279,7 @@ export function JourneyExperience() {
                   href={googleMapsSearchUrl(journey.destination)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] px-5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)]"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] px-5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)]"
                 >
                   Google Mapsで見る
                   <ExternalLink size={16} />
@@ -2234,7 +2288,7 @@ export function JourneyExperience() {
             </div>
 
             <div className="contents lg:block lg:min-w-0 lg:space-y-4">
-              <div className="order-3 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
+              <div className="order-3 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-[color:var(--muted)]">
@@ -2291,7 +2345,7 @@ export function JourneyExperience() {
               </div>
 
               <div className="order-4 grid grid-cols-2 gap-4 lg:order-none">
-                <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                   <TransportIcon
                     mode={journey.transport}
                     className="text-forest dark:text-forest-ink"
@@ -2306,7 +2360,7 @@ export function JourneyExperience() {
                     {transportLabel(journey.transport, journey.transfer)}での目安
                   </p>
                 </div>
-                <div className="rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
                   <WalletCards
                     size={21}
                     className="text-vermilion"
@@ -2334,7 +2388,7 @@ export function JourneyExperience() {
                 destination={journey.destination}
               />
 
-              <div className="order-5 rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
+              <div className="order-5 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
                 <h3 className="text-sm font-black">
                   費用の内訳
                   <span className="ml-1.5 text-xs font-bold text-[color:var(--muted)]">
@@ -2372,7 +2426,7 @@ export function JourneyExperience() {
                 </p>
               </div>
 
-              <div className="order-6 flex items-start gap-3 rounded-lg bg-forest p-5 text-white lg:order-none">
+              <div className="order-6 flex items-start gap-3 rounded-[24px] bg-forest p-5 text-white lg:order-none">
                 <TabiMascot mood="excited" size="small" />
                 <div className="pt-3">
                   <p className="text-xs font-bold text-white/80">
@@ -2390,6 +2444,12 @@ export function JourneyExperience() {
                 placeId={journey.destination.id}
                 name={journey.destination.name}
                 prefecture={journey.prefecture.nameJa}
+              />
+
+              <PlaceReviews
+                key={`reviews-${journey.destination.id}`}
+                className="order-6 lg:order-none"
+                placeId={journey.destination.id}
               />
 
               {authEnabled &&
@@ -2463,5 +2523,6 @@ export function JourneyExperience() {
         </motion.section>
       )}
     </AnimatePresence>
+    </>
   );
 }

@@ -139,6 +139,9 @@ async function fetchCategoryPages(
     gsrlimit: "30",
     gsrnamespace: "0",
     prop: "coordinates|pageimages",
+    // Without this the API returns coordinates for only 10 pages per batch,
+    // and the rest get dropped by the filter below.
+    colimit: "max",
     piprop: "thumbnail",
     pithumbsize: "1000",
     format: "json",

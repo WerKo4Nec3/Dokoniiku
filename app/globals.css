@@ -465,3 +465,487 @@ a:focus-visible {
 .dark .leaflet-tile-pane {
   filter: invert(1) hue-rotate(180deg) brightness(0.95) contrast(0.85) saturate(0.6);
 }
+
+/* ---- Landing scenes (features/scene) ----------------------------------- */
+
+/* The art box reproduces object-fit: cover around a focus point, so every
+   overlay positioned in % of the box stays glued to the painting. */
+.scene-art {
+  position: absolute;
+  width: max(100vw, calc(100vh * var(--ar)));
+  height: max(100vh, calc(100vw / var(--ar)));
+  left: calc((100vw - max(100vw, calc(100vh * var(--ar)))) * var(--fx));
+  top: calc((100vh - max(100vh, calc(100vw / var(--ar)))) * var(--fy));
+  will-change: transform;
+}
+.scene-root {
+  --veil: var(--background);
+  background: var(--background);
+}
+.scene-root[data-ink="light"] {
+  --veil: #0d1222;
+}
+.dark .scene-root {
+  --veil: var(--background);
+}
+.dark .scene-plate {
+  filter: brightness(0.6) saturate(0.9);
+}
+.dark .scene-tabi {
+  filter: brightness(0.85);
+}
+
+/* Legibility veil: from the text side (left on wide screens, top on tall). */
+.scene-veil {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--veil) 72%, transparent) 0%,
+    color-mix(in srgb, var(--veil) 40%, transparent) 32%,
+    transparent 60%
+  );
+}
+.scene-root[data-layout="tall"] .scene-veil {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--veil) 78%, transparent) 0%,
+    color-mix(in srgb, var(--veil) 46%, transparent) 34%,
+    transparent 62%
+  );
+}
+.scene-veil-flat {
+  background: var(--veil);
+}
+
+/* Slow Ken Burns drift of the whole painting. */
+.scene-drift {
+  animation: scene-drift 42s ease-in-out infinite alternate;
+}
+@keyframes scene-drift {
+  from { transform: scale(1) translate3d(0, 0, 0); }
+  to { transform: scale(1.035) translate3d(-0.6%, -0.4%, 0); }
+}
+
+/* Sun glints on water. */
+.scene-glint {
+  position: absolute;
+  height: max(1.5px, 0.2%);
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.95), rgb(255 255 255 / 0));
+  mix-blend-mode: screen;
+  opacity: 0;
+  transform: translate(-50%, -50%) scaleX(0.3);
+  animation: scene-glint 3s ease-in-out infinite;
+}
+@keyframes scene-glint {
+  0% { opacity: 0; transform: translate(-50%, -50%) scaleX(0.3); }
+  45% { opacity: 0.95; transform: translate(-50%, -50%) scaleX(1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scaleX(0.5); }
+}
+
+/* Birds: cross the sky band, then stay off-stage for a while. */
+.scene-fly {
+  animation: scene-fly 48s linear infinite;
+  opacity: 0;
+}
+@keyframes scene-fly {
+  0% { transform: translateX(-6%); opacity: 0; }
+  3% { opacity: 1; }
+  55% { opacity: 1; }
+  58% { transform: translateX(106%); opacity: 0; }
+  100% { transform: translateX(106%); opacity: 0; }
+}
+.scene-bob {
+  color: #fbfcfd;
+  filter: drop-shadow(0 1px 0 rgb(40 50 70 / 0.25));
+  animation: scene-bob 4.5s ease-in-out infinite;
+}
+@keyframes scene-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-60%); }
+}
+
+/* Tabi breathing on his ledge. */
+.scene-breathe {
+  transform-origin: 50% 100%;
+  animation: scene-breathe 4.2s ease-in-out infinite;
+}
+@keyframes scene-breathe {
+  0%, 100% { transform: scale(1, 1); }
+  50% { transform: scale(1.012, 1.022); }
+}
+
+/* Falling petals / leaves / snow, in screen space. */
+.scene-fall {
+  position: absolute;
+  top: -6%;
+  animation: scene-fall 16s linear infinite;
+}
+@keyframes scene-fall {
+  to { transform: translateY(115vh); }
+}
+.scene-sway {
+  display: block;
+  animation: scene-sway 4s ease-in-out infinite alternate;
+}
+@keyframes scene-sway {
+  from { transform: translateX(-22px) rotate(-30deg); }
+  to { transform: translateX(22px) rotate(40deg); }
+}
+.scene-drift-snow {
+  display: block;
+  animation: scene-snow 5s ease-in-out infinite alternate;
+}
+@keyframes scene-snow {
+  from { transform: translateX(-10px); }
+  to { transform: translateX(10px); }
+}
+
+/* Onsen steam and lantern glow. */
+.scene-steam {
+  position: absolute;
+  width: 3.5%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(255 255 255 / 0.55), rgb(255 255 255 / 0));
+  filter: blur(4px);
+  opacity: 0;
+  animation: scene-steam 6.6s ease-out infinite;
+}
+@keyframes scene-steam {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  30% { opacity: 0.6; }
+  100% { opacity: 0; transform: translate(-50%, -260%) scale(1.9); }
+}
+.scene-lantern {
+  position: absolute;
+  width: 4%;
+  aspect-ratio: 1;
+  border-radius: 9999px;
+  background: radial-gradient(closest-side, rgb(255 196 120 / 0.55), rgb(255 160 80 / 0));
+  mix-blend-mode: screen;
+  transform: translate(-50%, -50%);
+  animation: scene-flicker 3.4s steps(1, end) infinite;
+}
+@keyframes scene-flicker {
+  0% { opacity: 0.75; }
+  18% { opacity: 0.9; }
+  21% { opacity: 0.6; }
+  24% { opacity: 0.85; }
+  62% { opacity: 0.7; }
+  66% { opacity: 0.92; }
+  100% { opacity: 0.75; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scene-drift,
+  .scene-breathe,
+  .scene-glint,
+  .scene-fly,
+  .scene-fall,
+  .scene-steam,
+  .scene-lantern {
+    animation: none;
+  }
+}
+
+/* Copy that sits straight on the art (not on a card): white over
+   light-ink scenes in light mode. */
+html[data-scene-ink="light"]:not(.dark) .scene-copy {
+  --foreground: #ffffff;
+  --muted: rgb(255 255 255 / 0.82);
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.25);
+}
+
+/* Frosted panels floating over the scene. */
+.scene-glass {
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  border: 1px solid color-mix(in srgb, var(--surface) 60%, transparent);
+  box-shadow: 0 18px 50px -18px rgb(20 16 12 / 0.35);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  backdrop-filter: blur(18px) saturate(1.15);
+}
+.dark .scene-glass {
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+/* The header melts into the scene while one is on screen. */
+html[data-scene="on"] .app-header {
+  background: transparent;
+  border-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/* Primary pill and round stepper used on the scene screens. */
+.scene-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-radius: 9999px;
+  background: rgb(var(--c-vermilion));
+  padding: 1rem 2rem;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: #fff;
+  box-shadow: 0 14px 30px -12px rgb(var(--c-vermilion) / 0.75);
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+.scene-cta:hover:not(:disabled) {
+  filter: brightness(1.07);
+}
+.scene-cta:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.scene-round {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 9999px;
+  border: 1px solid color-mix(in srgb, var(--foreground) 22%, transparent);
+  background: color-mix(in srgb, var(--surface) 40%, transparent);
+  color: var(--foreground);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.scene-round:hover:not(:disabled) {
+  border-color: rgb(var(--c-vermilion));
+  color: rgb(var(--c-vermilion));
+}
+.scene-round:disabled {
+  opacity: 0.35;
+}
+
+/* ---- かぜOS: Tabi's tablet around the cabinet pages ------------------- */
+
+:root {
+  --os-gap: 14px;
+  --os-bezel: 12px;
+  --os-radius: 44px;
+  --os-status: 40px;
+  --os-dock: 64px;
+  --os-desk: color-mix(in srgb, var(--background) 82%, #6b5b4a);
+  --os-bezel-color: color-mix(in srgb, rgb(var(--c-vermilion)) 10%, #1c1a1f);
+}
+.dark {
+  --os-desk: #0a0908;
+  --os-bezel-color: color-mix(in srgb, rgb(var(--c-vermilion)) 8%, #26232b);
+}
+@media (max-width: 640px) {
+  :root {
+    --os-gap: 6px;
+    --os-bezel: 6px;
+    --os-radius: 30px;
+    --os-status: 34px;
+    --os-dock: 58px;
+  }
+}
+
+/* The page scrolls normally underneath; this ring (and the desk around it,
+   painted by the huge shadow) hides whatever sits outside the screen. */
+.os-bezel {
+  position: fixed;
+  z-index: 35;
+  pointer-events: none;
+  top: calc(4rem + var(--os-gap));
+  left: var(--os-gap);
+  right: var(--os-gap);
+  bottom: var(--os-gap);
+  border: var(--os-bezel) solid var(--os-bezel-color);
+  border-radius: var(--os-radius);
+  box-shadow:
+    0 0 0 100vmax var(--os-desk),
+    inset 0 0 0 1px rgb(255 255 255 / 0.07),
+    inset 0 10px 30px -18px rgb(0 0 0 / 0.5);
+}
+.os-camera {
+  position: absolute;
+  top: calc(var(--os-bezel) / -2 - 2px);
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle at 35% 35%, #5d6b8a, #111 70%);
+}
+.os-statusbar {
+  position: fixed;
+  z-index: 36;
+  top: calc(4rem + var(--os-gap) + var(--os-bezel));
+  left: calc(var(--os-gap) + var(--os-bezel));
+  right: calc(var(--os-gap) + var(--os-bezel));
+  height: var(--os-status);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0 1.1rem;
+  border-radius: calc(var(--os-radius) - var(--os-bezel)) calc(var(--os-radius) - var(--os-bezel)) 0 0;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 72%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  backdrop-filter: blur(14px) saturate(1.2);
+}
+.os-dock {
+  position: fixed;
+  z-index: 36;
+  left: 50%;
+  bottom: calc(var(--os-gap) + var(--os-bezel) + 10px);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  max-width: calc(100vw - 2 * (var(--os-gap) + var(--os-bezel)) - 16px);
+  height: var(--os-dock);
+  padding: 0 0.7rem;
+  border-radius: 24px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--surface) 60%, transparent);
+  box-shadow: 0 14px 34px -14px rgb(0 0 0 / 0.45);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+}
+.dark .os-dock {
+  border-color: rgb(255 255 255 / 0.08);
+}
+
+/* Keep page content inside the screen. */
+html[data-os="on"] main {
+  padding-left: calc(var(--os-gap) + var(--os-bezel));
+  padding-right: calc(var(--os-gap) + var(--os-bezel));
+  padding-top: 0.5rem;
+  padding-bottom: calc(var(--os-dock) + var(--os-gap) + var(--os-bezel) + 2.5rem);
+}
+
+/* The open-trip pill: bottom of the page, or — inside the tablet — a
+   compact "live activity" in the middle of the status bar. */
+.trip-bar {
+  bottom: max(14px, env(safe-area-inset-bottom));
+}
+html[data-os="on"] .trip-bar {
+  top: calc(4rem + var(--os-gap) + var(--os-bezel) + (var(--os-status) - 32px) / 2);
+  bottom: auto;
+}
+
+/* ---- Tabi skin effects (features/mascot/TabiSprite) ------------------- */
+.skin-fx {
+  position: absolute;
+  width: 12%;
+  aspect-ratio: 1;
+  opacity: 0;
+}
+.skin-fx-sparkle {
+  background: radial-gradient(closest-side, #fff8d6, rgb(255 214 110 / 0.9) 30%, transparent 70%);
+  clip-path: polygon(50% 0, 61% 39%, 100% 50%, 61% 61%, 50% 100%, 39% 61%, 0 50%, 39% 39%);
+  animation: skin-twinkle 2.8s ease-in-out infinite;
+}
+@keyframes skin-twinkle {
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+.skin-fx-maple,
+.skin-fx-sakura,
+.skin-fx-snow {
+  animation: skin-fall 4.6s linear infinite;
+}
+.skin-fx-maple {
+  width: 11%;
+  background: #d9482b;
+  clip-path: polygon(50% 0, 59% 26%, 80% 16%, 72% 40%, 100% 42%, 76% 56%, 86% 76%, 59% 68%, 54% 100%, 46% 100%, 41% 68%, 14% 76%, 24% 56%, 0 42%, 28% 40%, 20% 16%, 41% 26%);
+}
+.skin-fx-sakura {
+  width: 8%;
+  background: #f7b8c6;
+  border-radius: 80% 0 80% 0;
+}
+.skin-fx-snow {
+  width: 5%;
+  border-radius: 9999px;
+  background: #fff;
+  box-shadow: 0 0 4px rgb(255 255 255 / 0.9);
+}
+@keyframes skin-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(0deg); }
+  15% { opacity: 0.95; }
+  85% { opacity: 0.9; }
+  100% { opacity: 0; transform: translate(10px, 520%) rotate(220deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skin-fx { animation: none; opacity: 0; }
+}
+
+/* ---- Quest board (掲示板) ---------------------------------------------- */
+.quest-frame {
+  border-radius: 26px;
+  padding: 12px;
+  background:
+    repeating-linear-gradient(92deg, rgb(255 255 255 / 0.05) 0 2px, transparent 2px 9px),
+    linear-gradient(160deg, #8a5a35, #5e3b22 60%, #6e4528);
+  box-shadow: 0 20px 40px -20px rgb(40 20 5 / 0.6), inset 0 1px 0 rgb(255 255 255 / 0.18);
+}
+.quest-cork {
+  border-radius: 16px;
+  background-color: #c79f73;
+  background-image:
+    radial-gradient(rgb(120 80 40 / 0.35) 1px, transparent 1.4px),
+    radial-gradient(rgb(255 240 210 / 0.25) 1px, transparent 1.6px),
+    radial-gradient(rgb(90 55 25 / 0.25) 1.2px, transparent 1.8px);
+  background-size: 9px 9px, 13px 13px, 17px 17px;
+  background-position: 0 0, 4px 6px, 2px 11px;
+  box-shadow: inset 0 2px 10px rgb(60 30 10 / 0.45);
+}
+.dark .quest-cork {
+  background-color: #8a6a49;
+}
+.quest-note {
+  position: relative;
+  border-radius: 4px 4px 10px 10px;
+  background:
+    repeating-linear-gradient(180deg, transparent 0 27px, rgb(120 90 50 / 0.12) 27px 28px),
+    linear-gradient(180deg, #fffaf0, #f6ecd8);
+  color: #2b2218;
+  box-shadow: 0 10px 18px -10px rgb(40 20 5 / 0.55), 0 2px 0 rgb(255 255 255 / 0.6) inset;
+}
+.quest-note-muted {
+  background: linear-gradient(180deg, #f3ecde, #e7dcc6);
+  color: #6d6150;
+}
+.quest-pin {
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 9999px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle at 35% 30%, rgb(255 255 255 / 0.85), var(--pin) 45%, color-mix(in srgb, var(--pin) 70%, #000) 100%);
+  box-shadow: 0 3px 4px rgb(0 0 0 / 0.35);
+}
+.quest-seal {
+  display: grid;
+  place-items: center;
+  border: 3px double currentColor;
+  border-radius: 8px;
+  font-family: var(--font-display), serif;
+  font-weight: 900;
+  line-height: 1.05;
+  transform: rotate(-9deg);
+}
+
+/* 実績解除 toast: a light sweep across the card. */
+.achievement-shine {
+  background: linear-gradient(105deg, transparent 35%, rgb(255 230 160 / 0.22) 50%, transparent 65%);
+  background-size: 250% 100%;
+  animation: achievement-shine 2.4s ease-in-out 0.3s 2;
+}
+@keyframes achievement-shine {
+  from { background-position: 120% 0; }
+  to { background-position: -120% 0; }
+}
+.dark .area-map-raw .leaflet-tile-pane {
+  filter: brightness(0.85);
+}

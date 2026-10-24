@@ -7,7 +7,6 @@ import type { DestinationCategory } from "@/types";
 import { CATEGORY_ORDER, CategoryCard } from "@/components/journey/CategoryCard";
 import {
   PREFERENCES_OPEN_EVENT,
-  hasOnboarded,
   markOnboarded,
   readPreferences,
   writePreferences,
@@ -19,19 +18,6 @@ import {
 export function PreferencesDialog() {
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<DestinationCategory>>(new Set());
-
-  // Load current picks and auto-open for first-time visitors on the home page.
-  useEffect(() => {
-    setSelected(new Set(readPreferences()));
-    if (
-      !hasOnboarded() &&
-      typeof window !== "undefined" &&
-      window.location.pathname === "/"
-    ) {
-      const t = setTimeout(() => setOpen(true), 900);
-      return () => clearTimeout(t);
-    }
-  }, []);
 
   useEffect(() => {
     function onOpen() {

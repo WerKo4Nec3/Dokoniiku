@@ -3,9 +3,13 @@
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
+import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { AppIcon } from "@/components/tabi-os/AppIcon";
+import { appForPath } from "@/components/tabi-os/apps";
+import { TabiSprite } from "@/features/mascot/TabiSprite";
+import type { TabiPose } from "@/lib/tabiSkin";
 
-type Mascot = "waving" | "pointing" | "map" | "camera" | "walking";
 type Accent = "vermilion" | "forest" | "sun" | "sky";
 
 const accentText: Record<Accent, string> = {
@@ -14,12 +18,6 @@ const accentText: Record<Accent, string> = {
   sun: "text-[#8c6702] dark:text-sun",
   sky: "text-[#1b7182] dark:text-sky",
 };
-const accentBar: Record<Accent, string> = {
-  vermilion: "bg-vermilion",
-  forest: "bg-forest",
-  sun: "bg-sun",
-  sky: "bg-sky",
-};
 const accentHalo: Record<Accent, string> = {
   vermilion: "bg-vermilion/15",
   forest: "bg-forest/15",
@@ -27,33 +25,36 @@ const accentHalo: Record<Accent, string> = {
   sky: "bg-sky/20",
 };
 
-// Reusable hero/section header for every cabinet page: eyebrow + title +
-// subtitle, a soft accent wash, and an optional mascot.
+// The title bar of a かぜOS app: the app's icon, eyebrow + title +
+// subtitle, and Tabi (in the chosen skin) on the side. The OS dock handles
+// navigation, so a back link only shows when a page asks for one.
 export function CabinetHeader({
   eyebrow,
   title,
   subtitle,
   mascot,
   accent = "vermilion",
-  backHref = "/",
-  backLabel = "旅にもどる",
+  backHref,
+  backLabel = "もどる",
   action,
 }: {
   eyebrow?: string;
   title: string;
   subtitle?: string;
-  mascot?: Mascot;
+  mascot?: TabiPose;
   accent?: Accent;
   backHref?: string;
   backLabel?: string;
   action?: ReactNode;
 }) {
+  const pathname = usePathname();
+  const app = appForPath(pathname);
   return (
     <div>
       {backHref && (
         <Link
           href={backHref}
-          className="inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+          className="mb-3 inline-flex items-center gap-1.5 text-sm font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
         >
           <ArrowLeft size={16} />
           {backLabel}
@@ -61,49 +62,45 @@ export function CabinetHeader({
       )}
 
       <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="relative mt-4 overflow-hidden rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-6 shadow-float sm:px-7 sm:py-8"
+        initial={{ opacity: 0, y: 10, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="relative overflow-clip rounded-[28px] border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-5 shadow-float sm:px-7 sm:py-6"
       >
         <div
           aria-hidden
-          className={`pointer-events-none absolute -right-10 -top-12 h-40 w-40 rounded-full blur-2xl ${accentHalo[accent]}`}
+          className={`pointer-events-none absolute -right-10 -top-14 h-44 w-44 rounded-full blur-2xl ${accentHalo[accent]}`}
         />
-
         <div className="relative flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            {eyebrow && (
-              <span
-                className={`inline-flex items-center gap-2 text-xs font-black tracking-wide ${accentText[accent]}`}
-              >
-                <span className={`h-3 w-1 rounded-full ${accentBar[accent]}`} />
-                {eyebrow}
+          <div className="flex min-w-0 items-start gap-4">
+            {app && (
+              <span className="hidden sm:block">
+                <AppIcon app={app} size="lg" />
               </span>
             )}
-            <h1 className="mt-2 text-3xl font-black leading-tight sm:text-4xl">
-              {title}
-            </h1>
-            {subtitle && (
-              <p className="mt-2 max-w-xl text-sm font-medium text-[color:var(--muted)]">
-                {subtitle}
-              </p>
-            )}
-            {action && <div className="mt-4">{action}</div>}
+            <div className="min-w-0">
+              {eyebrow && (
+                <span className={`text-[11px] font-black tracking-[0.25em] ${accentText[accent]}`}>
+                  {eyebrow}
+                </span>
+              )}
+              <h1 className="mt-1 font-display text-3xl font-bold leading-tight tracking-[0.04em] sm:text-4xl">
+                {title}
+              </h1>
+              {subtitle && (
+                <p className="mt-2 max-w-xl text-sm font-medium text-[color:var(--muted)]">
+                  {subtitle}
+                </p>
+              )}
+              {action && <div className="mt-4">{action}</div>}
+            </div>
           </div>
 
           {mascot && (
-            <div className="relative hidden shrink-0 sm:block">
-              <div
-                aria-hidden
-                className={`absolute inset-0 scale-125 rounded-full blur-xl ${accentHalo[accent]}`}
-              />
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/mascot/${mascot}.png`}
-                alt=""
-                className="relative h-20 w-20 object-contain drop-shadow sm:h-24 sm:w-24"
-              />
-            </div>
+            <TabiSprite
+              pose={mascot}
+              className="hidden aspect-[538/422] w-28 shrink-0 sm:block"
+            />
           )}
         </div>
       </motion.div>

@@ -2,7 +2,10 @@ import type { Metadata, Viewport } from "next";
 import { Zen_Maru_Gothic, Zen_Kaku_Gothic_New } from "next/font/google";
 import "./globals.css";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { CabinetChrome } from "@/components/CabinetChrome";
+import { TabiOSFrame } from "@/components/tabi-os/TabiOSFrame";
+import { ActiveTripBar } from "@/components/trip/ActiveTripBar";
+import { LiveShareEngine } from "@/components/live/LiveShareEngine";
+import { AchievementToaster } from "@/components/achievements/AchievementToaster";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
@@ -12,7 +15,7 @@ import { AuthProvider } from "@/lib/auth/AuthProvider";
 // JP; only the small Latin subset is preloaded (JP glyphs stream on demand).
 const displayFont = Zen_Maru_Gothic({
   subsets: ["latin"],
-  weight: ["500", "700", "900"],
+  weight: ["400", "500", "700", "900"],
   variable: "--font-display",
   display: "swap",
 });
@@ -80,8 +83,11 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <AppHeader />
-          <CabinetChrome />
+          <TabiOSFrame />
           <main>{children}</main>
+          <ActiveTripBar />
+          <LiveShareEngine />
+          <AchievementToaster />
           <AuthDialog />
           <PreferencesDialog />
         </AuthProvider>

@@ -1,5 +1,7 @@
+import { TRAVEL_EVENTS } from "@/data/events";
+import { eventXp } from "@/lib/events";
 import type { DestinationCategory, PlaceStatus, SavedJourney } from "@/types";
-import { statusOf } from "@/lib/utils/travel";
+import { isVerifiedVisit, statusOf } from "@/lib/utils/travel";
 
 // XP earned for a place at each status (cumulative feel: the further along the
 // pipeline, the more it's worth).
@@ -28,8 +30,18 @@ export function computeXp(journeys: SavedJourney[]): number {
   // Bonus for breadth: each conquered prefecture and region.
   xp += donePrefectures.size * 50;
   xp += doneRegions.size * 100;
+  // Travel records: a written review, and a GPS-confirmed visit.
+  for (const journey of journeys) {
+    if (journey.review) xp += REVIEW_XP;
+    if (isVerifiedVisit(journey)) xp += VERIFIED_XP;
+  }
+  // Seasonal quest goals (掲示板).
+  xp += eventXp(TRAVEL_EVENTS, journeys);
   return xp;
 }
+
+const REVIEW_XP = 30;
+const VERIFIED_XP = 40;
 
 // Cumulative XP required to reach the start of a level (L1 = 0, L2 = 100,
 // L3 = 300, L4 = 600 … each level costs 100 more than the previous).
@@ -219,137 +231,6 @@ export function computeStats(journeys: SavedJourney[]): ProfileStats {
 }
 
 // ---- Achievements ----
-
-export type Achievement = {
-  id: string;
-  name: string;
-  desc: string;
-  emoji: string;
-  earned: boolean;
-  current: number;
-  target: number;
-};
-
-function doneWithCategory(
-  journeys: SavedJourney[],
-  category: DestinationCategory,
-): number {
-  return journeys.filter(
-    (j) =>
-      statusOf(j) === "done" && j.destination.categories.includes(category),
-  ).length;
-}
-
-export function computeAchievements(journeys: SavedJourney[]): Achievement[] {
-  const stats = computeStats(journeys);
-  const farthestDone = Math.max(
-    0,
-    ...journeys
-      .filter((j) => statusOf(j) === "done")
-      .map((j) => j.distanceKm ?? 0),
-  );
-
-  const defs: Omit<Achievement, "earned">[] = [
-    {
-      id: "first-save",
-      name: "はじめの一歩",
-      desc: "旅を1つ保存する",
-      emoji: "🐣",
-      current: Math.min(stats.saved, 1),
-      target: 1,
-    },
-    {
-      id: "collector",
-      name: "コレクター",
-      desc: "旅を10個保存する",
-      emoji: "📚",
-      current: Math.min(stats.saved, 10),
-      target: 10,
-    },
-    {
-      id: "first-done",
-      name: "初制覇",
-      desc: "1か所を「完了」にする",
-      emoji: "🚩",
-      current: Math.min(stats.done, 1),
-      target: 1,
-    },
-    {
-      id: "pref-5",
-      name: "五県制覇",
-      desc: "5都道府県を制覇する",
-      emoji: "🗾",
-      current: Math.min(stats.prefectures, 5),
-      target: 5,
-    },
-    {
-      id: "pref-10",
-      name: "全国行脚",
-      desc: "10都道府県を制覇する",
-      emoji: "🎌",
-      current: Math.min(stats.prefectures, 10),
-      target: 10,
-    },
-    {
-      id: "regions-5",
-      name: "地方めぐり",
-      desc: "5つの地方を制覇する",
-      emoji: "🧭",
-      current: Math.min(stats.regions, 5),
-      target: 5,
-    },
-    {
-      id: "onsen",
-      name: "湯めぐり",
-      desc: "温泉を3か所巡る",
-      emoji: "♨️",
-      current: Math.min(doneWithCategory(journeys, "hot-spring"), 3),
-      target: 3,
-    },
-    {
-      id: "history",
-      name: "歴史探訪",
-      desc: "歴史スポットを3か所巡る",
-      emoji: "🏯",
-      current: Math.min(doneWithCategory(journeys, "history"), 3),
-      target: 3,
-    },
-    {
-      id: "gourmet",
-      name: "食い倒れ",
-      desc: "グルメを3か所巡る",
-      emoji: "🍜",
-      current: Math.min(doneWithCategory(journeys, "food"), 3),
-      target: 3,
-    },
-    {
-      id: "viewpoint",
-      name: "絶景ハンター",
-      desc: "絶景を3か所巡る",
-      emoji: "⛰️",
-      current: Math.min(doneWithCategory(journeys, "viewpoint"), 3),
-      target: 3,
-    },
-    {
-      id: "far",
-      name: "遠征者",
-      desc: "500km以上の旅を完了する",
-      emoji: "🛫",
-      current: Math.min(farthestDone, 500),
-      target: 500,
-    },
-    {
-      id: "distance-1000",
-      name: "旅の総距離1000km",
-      desc: "完了した旅の合計1000km",
-      emoji: "🧳",
-      current: Math.min(stats.distanceKm, 1000),
-      target: 1000,
-    },
-  ];
-
-  return defs.map((d) => ({ ...d, earned: d.current >= d.target }));
-}
 
 // ---- Year recap (「旅の年間まとめ」) ----
 

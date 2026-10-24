@@ -61,7 +61,7 @@ export function ImageGallery({
   return (
     <div className={className}>
       <div
-        className={`relative h-60 overflow-hidden rounded-lg sm:h-80 ${frameClass}`}
+        className={`relative h-60 overflow-hidden rounded-[28px] sm:h-80 ${frameClass}`}
       >
         <div
           key={current}
@@ -81,7 +81,7 @@ export function ImageGallery({
               onClick={() => setActiveSrc(src)}
               aria-label={`${alt} 写真 ${index + 1}`}
               aria-current={src === current}
-              className={`h-14 w-20 shrink-0 snap-start overflow-hidden rounded-md border-2 bg-[color:var(--surface-muted)] bg-cover bg-center transition ${
+              className={`h-14 w-20 shrink-0 snap-start overflow-hidden rounded-xl border-2 bg-[color:var(--surface-muted)] bg-cover bg-center transition ${
                 src === current
                   ? "border-vermilion opacity-100"
                   : "border-transparent opacity-70 hover:opacity-100"

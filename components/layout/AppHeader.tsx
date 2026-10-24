@@ -11,6 +11,7 @@ import {
   Settings,
   ShieldCheck,
   Sun,
+  Tablet,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -75,7 +76,7 @@ export function AppHeader() {
   }
 
   return (
-    <header className="fixed inset-x-0 top-0 z-[1000] border-b border-black/5 bg-[color:color-mix(in_srgb,var(--background)_88%,transparent)] backdrop-blur-xl dark:border-white/10">
+    <header className="app-header fixed inset-x-0 top-0 z-[1000] border-b transition-[background-color,border-color] duration-500 border-black/5 bg-[color:color-mix(in_srgb,var(--background)_88%,transparent)] backdrop-blur-xl dark:border-white/10">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         <Link
           href="/"
@@ -138,6 +139,14 @@ export function AppHeader() {
                     <p className="truncate px-4 py-2 text-xs font-medium text-[color:var(--muted)]">
                       {user.displayName ?? user.email}
                     </p>
+                    <Link
+                      href="/tabi"
+                      onClick={() => setMenuOpen(false)}
+                      className="flex items-center gap-2 px-4 py-2.5 text-sm font-black text-vermilion transition hover:bg-[color:var(--surface-muted)]"
+                    >
+                      <Tablet size={16} />
+                      タビパッドを開く
+                    </Link>
                     <Link
                       href="/saved"
                       onClick={() => setMenuOpen(false)}
@@ -210,6 +219,14 @@ export function AppHeader() {
             </div>
           )}
 
+          <Link
+            href="/tabi"
+            aria-label="タビパッド"
+            title="タビパッド"
+            className="grid h-10 w-10 place-items-center rounded-full transition hover:bg-black/5 dark:hover:bg-white/10"
+          >
+            <Tablet size={19} />
+          </Link>
           <button
             type="button"
             onClick={toggleTheme}

@@ -18,7 +18,7 @@ type OpenMeteoResponse = {
 };
 
 // WMO weather codes → our four-icon set + a short Japanese label.
-function classify(code: number): { icon: WeatherInfo["icon"]; description: string } {
+export function classify(code: number): { icon: WeatherInfo["icon"]; description: string } {
   const table: Record<number, { icon: WeatherInfo["icon"]; description: string }> = {
     0: { icon: "sun", description: "快晴" },
     1: { icon: "sun", description: "晴れ" },

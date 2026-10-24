@@ -57,6 +57,26 @@ export function bearingDegrees(from: Coordinates, to: Coordinates): number {
   return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
+// Nearest of the eight compass directions for a bearing from → to.
+export function directionTowards(from: Coordinates, to: Coordinates): Direction {
+  const deg = bearingDegrees(from, to);
+  // `directions` runs clockwise from 北 in 45° steps.
+  return directions[Math.round(deg / 45) % 8];
+}
+
+// "鷹ノ巣山 (愛知県)" → "鷹ノ巣山": drop Wikipedia's disambiguation suffix.
+export function displayPlaceName(name: string): string {
+  return name.replace(/\s*[(（][^()（）]*[)）]$/, "") || name;
+}
+
+// Visited for real: arrival or a check-in confirmed by GPS.
+export function isVerifiedVisit(journey: {
+  review?: { verified?: boolean };
+  checkIns?: string[];
+}): boolean {
+  return Boolean(journey.review?.verified || journey.checkIns?.length);
+}
+
 function angularDifference(a: number, b: number): number {
   const diff = Math.abs(a - b) % 360;
   return diff > 180 ? 360 - diff : diff;
@@ -92,6 +112,15 @@ export function haversineDistanceKm(
   from: { latitude: number; longitude: number },
   to: { latitude: number; longitude: number },
 ): number {
+  return Math.round(preciseDistanceKm(from, to));
+}
+
+// Unrounded great-circle distance, for short ranges (arrival checks, live
+// location throttling, quest spot matching).
+export function preciseDistanceKm(
+  from: { latitude: number; longitude: number },
+  to: { latitude: number; longitude: number },
+): number {
   const radius = 6371;
   const toRadians = (value: number) => (value * Math.PI) / 180;
   const latDelta = toRadians(to.latitude - from.latitude);
@@ -102,7 +131,7 @@ export function haversineDistanceKm(
       Math.cos(toRadians(to.latitude)) *
       Math.sin(lonDelta / 2) ** 2;
 
-  return Math.round(radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
+  return radius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 export const transportInfo: Record<

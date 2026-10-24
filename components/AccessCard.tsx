@@ -65,7 +65,7 @@ export function AccessCard({
 
   return (
     <div
-      className={`rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}
+      className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}
     >
       <p className="text-xs font-bold text-[color:var(--muted)]">アクセス</p>
       {station ? (
