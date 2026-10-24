@@ -77,8 +77,12 @@ export type EstimatedBudget = {
   transportCost: number;
   activityCost: number;
   foodCost: number;
+  // Overnight trips only.
+  lodgingCost?: number;
   total: number;
 };
+
+export type LodgingType = "hostel" | "business" | "ryokan";
 
 export type SearchProviderResult<T> = {
   data: T;
@@ -101,6 +105,9 @@ export type JourneyResult = {
   transport: TransportMode;
   transfer: boolean;
   isMock: boolean;
+  // Nights away (absent = day trip) and where they're spent.
+  nights?: number;
+  lodging?: LodgingType;
 };
 
 // Where a saved place is in the user's journey: from idea to completed.

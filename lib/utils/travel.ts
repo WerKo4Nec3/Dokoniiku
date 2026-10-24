@@ -6,6 +6,7 @@ import type {
   Difficulty,
   Direction,
   EstimatedBudget,
+  LodgingType,
   PlaceStatus,
   Prefecture,
   TransportMode,
@@ -211,27 +212,47 @@ function transportCostFor(
   return cost;
 }
 
+// Rough per-person, per-night prices. A ryokan includes dinner + breakfast.
+export const lodgingInfo: Record<
+  LodgingType,
+  { labelJa: string; yenPerNight: number; withMeals: boolean }
+> = {
+  hostel: { labelJa: "ゲストハウス", yenPerNight: 4000, withMeals: false },
+  business: { labelJa: "ビジネスホテル", yenPerNight: 8000, withMeals: false },
+  ryokan: { labelJa: "旅館（2食付き）", yenPerNight: 16000, withMeals: true },
+};
+
+export const lodgingTypes: LodgingType[] = ["hostel", "business", "ryokan"];
+
+export type Stay = { nights: number; lodging: LodgingType };
+
 export function estimateBudget(
   distanceKm: number,
   categories: DestinationCategory[],
   people: number = 1,
   transport: TransportMode = "train",
   transfer: boolean = false,
+  stay?: Stay,
 ): EstimatedBudget {
   const headcount = Math.max(1, Math.round(people));
   const [minimum, maximum] = activityRanges[categories[0] ?? "nature"];
   const perActivity = roundToHundred((minimum + maximum) / 2);
-  const perFood = 1200;
+  const nights = Math.max(0, stay?.nights ?? 0);
+  const lodging = stay ? lodgingInfo[stay.lodging] : null;
+  // Lunch every day; dinner + breakfast for each night unless the inn serves them.
+  const perFood = 1200 * (nights + 1) + (lodging?.withMeals ? 0 : 2000 * nights);
 
   const transportCost = transportCostFor(distanceKm, headcount, transport, transfer);
   const activityCost = perActivity * headcount;
   const foodCost = perFood * headcount;
+  const lodgingCost = lodging ? lodging.yenPerNight * nights * headcount : 0;
 
   return {
     transportCost,
     activityCost,
     foodCost,
-    total: transportCost + activityCost + foodCost,
+    ...(lodgingCost ? { lodgingCost } : {}),
+    total: transportCost + activityCost + foodCost + lodgingCost,
   };
 }
 
@@ -245,9 +266,9 @@ export function bestTransport(opts: {
   transfer: boolean;
   maxBudget: number;
   maxOneWayMinutes: number;
-  /** Cycling: how far the rider can go in a day (round trip), and trip days. */
+  /** Cycling: the whole ride, there and back. */
   bikeRangeKm?: number;
-  days?: number;
+  stay?: Stay;
 }): { mode: TransportMode; minutes: number; total: number } | null {
   let best: { mode: TransportMode; minutes: number; total: number } | null = null;
   for (const mode of opts.modes) {
@@ -255,7 +276,7 @@ export function bestTransport(opts: {
     // Cyclists know their own range; for everything else the clock decides.
     const fits =
       mode === "bicycle" && opts.bikeRangeKm
-        ? opts.distanceKm <= bikeOneWayKm(opts.bikeRangeKm, opts.days ?? 1)
+        ? opts.distanceKm <= bikeOneWayKm(opts.bikeRangeKm)
         : minutes <= opts.maxOneWayMinutes;
     if (!fits) continue;
     const total = estimateBudget(
@@ -264,6 +285,7 @@ export function bestTransport(opts: {
       opts.people,
       mode,
       opts.transfer,
+      opts.stay,
     ).total;
     if (total > opts.maxBudget) continue;
     if (!best || total < best.total) best = { mode, minutes, total };
@@ -271,10 +293,11 @@ export function bestTransport(opts: {
   return best;
 }
 
-// A day of riding covers `rangeKm` there and back; an n-day trip can ride
-// out on the first half of the days and back on the rest.
-export function bikeOneWayKm(rangeKm: number, days: number): number {
-  return Math.round((rangeKm * Math.max(1, days)) / 2);
+// The rider sets the whole ride, there and back; half of it gets them to the
+// place. Staying over only splits it across days (out on day one, back on
+// the last), it doesn't stretch the reach.
+export function bikeOneWayKm(rangeKm: number): number {
+  return Math.round(rangeKm / 2);
 }
 
 // The furthest one-way distance any of the chosen modes can cover within the
@@ -285,14 +308,13 @@ export function reachKm(opts: {
   maxOneWayMinutes: number;
   maxDistanceKm: number;
   bikeRangeKm?: number;
-  days?: number;
 }): number {
   let reach = 0;
   for (const mode of opts.modes) {
     const info = transportInfo[mode];
     const km =
       mode === "bicycle" && opts.bikeRangeKm
-        ? bikeOneWayKm(opts.bikeRangeKm, opts.days ?? 1)
+        ? bikeOneWayKm(opts.bikeRangeKm)
         : ((opts.maxOneWayMinutes - info.overheadMin) / 60) * info.speedKmh;
     reach = Math.max(reach, km);
   }

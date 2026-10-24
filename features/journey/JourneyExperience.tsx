@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   ArrowRight,
+  BedDouble,
   Bike,
   Bookmark,
   CalendarDays,
@@ -98,6 +99,8 @@ import {
   haversineDistanceKm,
   isSeasonalMatch,
   journeyDifficulty,
+  lodgingInfo,
+  lodgingTypes,
   NEARBY_PREFECTURE_LIMIT_KM,
   pickDirection,
   pickPrefecture,
@@ -112,6 +115,7 @@ import type {
   DestinationCategory,
   Direction,
   JourneyResult,
+  LodgingType,
   Prefecture,
   StartPoint,
   TransportMode,
@@ -345,6 +349,8 @@ const tripLengthOptions: {
   { id: "two-night", labelJa: "2泊3日", maxOneWayMinutes: 600 },
 ];
 
+const nightsFor = (id: TripLengthId) => (id === "day" ? 0 : id === "one-night" ? 1 : 2);
+
 const transportIcons: Record<
   TransportMode,
   typeof Footprints
@@ -362,6 +368,8 @@ const BUDGET_MIN = 5000;
 // headcount — 20 people over a long distance can easily pass ¥1,000,000.
 const BUDGET_PER_PERSON_MAX = 60000;
 const DISTANCE_MAX = 800;
+const BIKE_RANGE_MIN = 20;
+const BIKE_RANGE_MAX = 300;
 const SHUFFLE_COUNT = 4;
 
 // Gemini-powered place insight is optional; the UI only appears when enabled.
@@ -440,8 +448,9 @@ export function JourneyExperience() {
     "shinkansen",
   ]);
   const [allowTransfer, setAllowTransfer] = useState(false);
-  // Cycling: how far the rider goes in a day, there and back.
+  // Cycling: the whole ride, there and back (split across days when staying).
   const [bikeRange, setBikeRange] = useState(60);
+  const [lodging, setLodging] = useState<LodgingType>("business");
   // Places fetched for the current prefecture + genres, so changing the
   // settings can re-check them instantly instead of searching again.
   const [candidateCache, setCandidateCache] = useState<{
@@ -693,16 +702,20 @@ export function JourneyExperience() {
   const maxOneWayMinutes =
     tripLengthOptions.find((option) => option.id === tripLength)
       ?.maxOneWayMinutes ?? 180;
-  const tripDays = tripLength === "day" ? 1 : tripLength === "one-night" ? 2 : 3;
+  const nights = nightsFor(tripLength);
+  const stay = { nights, lodging };
   const usableModes: TransportMode[] = transports.length ? transports : ["train"];
   const cycling = usableModes.includes("bicycle");
+  const humanPoweredOnly = usableModes.every((mode) => mode === "bicycle" || mode === "walk");
+  // A cyclist's own ride length is the limit; the generic distance cap
+  // only applies when something motorised is in the mix.
+  const distanceCap = cycling && humanPoweredOnly ? Infinity : maxDistance;
   // How far this trip can go one way with the chosen modes and days.
   const reach = reachKm({
     modes: usableModes,
     maxOneWayMinutes,
-    maxDistanceKm: maxDistance,
+    maxDistanceKm: distanceCap,
     bikeRangeKm: cycling ? bikeRange : undefined,
-    days: tripDays,
   });
 
   // Custom mode: which fetched places fit the budget, time/range and modes.
@@ -710,7 +723,7 @@ export function JourneyExperience() {
     const plans: Plan[] = [];
     for (const candidate of candidates) {
       const distance = haversineDistanceKm(start, candidate);
-      if (distance > maxDistance) continue;
+      if (distance > distanceCap) continue;
       const best = bestTransport({
         distanceKm: distance,
         categories: candidate.categories,
@@ -720,7 +733,7 @@ export function JourneyExperience() {
         maxBudget: budget,
         maxOneWayMinutes,
         bikeRangeKm: cycling ? bikeRange : undefined,
-        days: tripDays,
+        stay,
       });
       if (best) plans.push({ destination: candidate, transport: best.mode });
     }
@@ -817,10 +830,13 @@ export function JourneyExperience() {
       if (!plans.length) {
         // Say why: how far this trip reaches vs. the closest place here.
         const nearest = Math.min(...candidates.map((item) => haversineDistanceKm(start, item)));
+        const lodgingNote = nights
+          ? `（宿代の目安 ${formatYen(lodgingInfo[lodging].yenPerNight * nights * people)} も含めています）`
+          : "";
         setFilterNotice(
           nearest > reach
-            ? `この設定で行けるのは片道 約${reach}kmまで。${prefecture.nameJa}でいちばん近い候補は約${nearest}km先でした。移動手段や日数を変えるか、行ける範囲の都道府県で探してみてね。`
-            : "距離は届くけど、予算か移動時間が合いませんでした。下の設定をゆるめてみてね。",
+            ? `この設定で行けるのは片道 約${reach}kmまで。${prefecture.nameJa}でいちばん近い候補は約${nearest}km先でした。行ける範囲の都道府県で探してみてね。`
+            : `距離は届くけど、予算か移動時間が合いませんでした${lodgingNote}。下の設定をゆるめてみてね。`,
         );
         setSettingsOpen(true);
         setStage("prefecture");
@@ -899,12 +915,17 @@ export function JourneyExperience() {
       images,
     };
     const travel = estimateTravelTime(destination, start, transport, transfer);
+    // Nights only come from the custom settings; surprise trips are day trips.
+    const tripNights = nightsFor(tripLength);
+    const tripStay =
+      journeyMode === "custom" && tripNights ? { nights: tripNights, lodging } : undefined;
     const budgetResult = estimateBudget(
       travel.distanceKm,
       destination.categories,
       people,
       transport,
       transfer,
+      tripStay,
     );
     // Hold the result until the Japan → place fly-in has landed (plus a beat
     // to see the pin + name), but never longer than ~7s in total.
@@ -931,6 +952,7 @@ export function JourneyExperience() {
       transport,
       transfer,
       isMock: providerMock || weather.provider === "mock",
+      ...(tripStay ? { nights: tripStay.nights, lodging: tripStay.lodging } : {}),
     };
     setJourney(result);
     setSavedJourneyId(null);
@@ -1220,92 +1242,14 @@ export function JourneyExperience() {
 
   // Budget / time / distance / transport knobs. Shared between the mode page
   // and the "loosen your settings" panel on the prefecture stage — where the
-  // distance limit is gone (the prefecture is already chosen).
-  const humanPoweredOnly = usableModes.every((mode) => mode === "bicycle" || mode === "walk");
+  // distance limits are gone (the prefecture is already chosen).
+  const bikeOnly = cycling && humanPoweredOnly;
+  const bikeHalf = bikeOneWayKm(bikeRange);
+  const rideTime = (km: number) =>
+    formatMinutes(Math.round((km / transportInfo.bicycle.speedKmh) * 60));
+  const lodgingTotal = lodgingInfo[lodging].yenPerNight * nights * people;
   const renderKnobs = (atPrefecture: boolean) => (
     <div className="space-y-3 text-left">
-      <KnobCard
-        icon={WalletCards}
-        title={`予算（${people}名・上限）`}
-        value={formatYen(budget)}
-      >
-        <input
-          type="range"
-          min={BUDGET_MIN}
-          max={budgetMax}
-          step={1000}
-          value={budget}
-          onChange={(event) => setBudget(Number(event.target.value))}
-          className="range-brand"
-          style={
-            {
-              "--fill": `${sliderFill(budget, BUDGET_MIN, budgetMax)}%`,
-            } as React.CSSProperties
-          }
-        />
-        <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
-          <span>{formatYen(BUDGET_MIN)}</span>
-          <span>{formatYen(budgetMax)}</span>
-        </div>
-      </KnobCard>
-
-      <KnobCard icon={CalendarDays} title="旅の日数">
-        <div className="grid grid-cols-3 gap-2">
-          {tripLengthOptions.map((option) => {
-            const Icon = tripLengthIcons[option.id];
-            const active = tripLength === option.id;
-            return (
-              <button
-                key={option.id}
-                type="button"
-                aria-pressed={active}
-                onClick={() => setTripLength(option.id)}
-                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-bold transition ${
-                  active
-                    ? "border-vermilion bg-vermilion/10 text-vermilion"
-                    : "border-[color:var(--line)] bg-[color:var(--surface-muted)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-                }`}
-              >
-                <Icon size={18} />
-                {option.labelJa}
-                <span className="text-[10px] font-medium opacity-70">
-                  {cycling && humanPoweredOnly
-                    ? `片道〜${bikeOneWayKm(bikeRange, option.id === "day" ? 1 : option.id === "one-night" ? 2 : 3)}km`
-                    : `片道〜${Math.round(option.maxOneWayMinutes / 60)}h`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-      </KnobCard>
-
-      {!atPrefecture && (
-        <KnobCard
-          icon={Route}
-          title="出発地からの距離（上限）"
-          value={`約${maxDistance}km`}
-        >
-          <input
-            type="range"
-            min={5}
-            max={DISTANCE_MAX}
-            step={5}
-            value={maxDistance}
-            onChange={(event) => setMaxDistance(Number(event.target.value))}
-            className="range-brand"
-            style={
-              {
-                "--fill": `${sliderFill(maxDistance, 5, DISTANCE_MAX)}%`,
-              } as React.CSSProperties
-            }
-          />
-          <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
-            <span>5km</span>
-            <span>{DISTANCE_MAX}km</span>
-          </div>
-        </KnobCard>
-      )}
-
       <KnobCard icon={TrainFront} title="移動手段（複数選択可）">
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
           {allTransportModes.map((mode) => {
@@ -1339,47 +1283,184 @@ export function JourneyExperience() {
         </div>
       </KnobCard>
 
-      {cycling && (
-        <KnobCard icon={Bike} title="自転車で1日に走れる距離（往復）" value={`${bikeRange}km`}>
+      {cycling && !atPrefecture && (
+        <KnobCard icon={Bike} title="自転車で走る距離（往復の合計）" value={`${bikeRange}km`}>
           <input
             type="range"
-            min={20}
-            max={200}
+            min={BIKE_RANGE_MIN}
+            max={BIKE_RANGE_MAX}
             step={5}
             value={bikeRange}
             onChange={(event) => setBikeRange(Number(event.target.value))}
             className="range-brand"
-            style={{ "--fill": `${sliderFill(bikeRange, 20, 200)}%` } as React.CSSProperties}
+            style={
+              {
+                "--fill": `${sliderFill(bikeRange, BIKE_RANGE_MIN, BIKE_RANGE_MAX)}%`,
+              } as React.CSSProperties
+            }
           />
-          <p className="mt-1.5 text-[11px] font-medium text-[color:var(--muted)]">
-            日帰りなら片道〜{bikeOneWayKm(bikeRange, 1)}km、1泊2日なら片道〜{bikeOneWayKm(bikeRange, 2)}km。
+          <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+            <span>{BIKE_RANGE_MIN}km</span>
+            <span>{BIKE_RANGE_MAX}km</span>
+          </div>
+          <p className="mt-1.5 text-[11px] font-medium leading-5 text-[color:var(--muted)]">
+            {nights === 0
+              ? `行き${bikeHalf}km・帰り${bikeHalf}kmをその日のうちに（走るのは${rideTime(bikeRange)}）。`
+              : nights === 1
+                ? `1日目に${bikeHalf}km走って泊まり、2日目に${bikeHalf}km帰る（1日${rideTime(bikeHalf)}）。`
+                : `1日目に${bikeHalf}km、2日目は現地でのんびり、3日目に${bikeHalf}km帰る（1日${rideTime(bikeHalf)}）。`}
           </p>
         </KnobCard>
       )}
 
-      <KnobCard icon={Ticket} title="乗り継ぎ（タクシー等）">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-xs font-medium text-[color:var(--muted)]">
-            鉄道の旅にラストワンマイルのタクシーを許可します
-          </span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={allowTransfer}
-            aria-label="乗り継ぎを許可"
-            onClick={() => setAllowTransfer((value) => !value)}
-            className={`relative h-6 w-11 shrink-0 rounded-full transition ${
-              allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
-                allowTransfer ? "left-[22px]" : "left-0.5"
-              }`}
-            />
-          </button>
+      {!atPrefecture && !bikeOnly && (
+        <KnobCard
+          icon={Route}
+          title="出発地からの距離（上限）"
+          value={`約${maxDistance}km`}
+        >
+          <input
+            type="range"
+            min={5}
+            max={DISTANCE_MAX}
+            step={5}
+            value={maxDistance}
+            onChange={(event) => setMaxDistance(Number(event.target.value))}
+            className="range-brand"
+            style={
+              {
+                "--fill": `${sliderFill(maxDistance, 5, DISTANCE_MAX)}%`,
+              } as React.CSSProperties
+            }
+          />
+          <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+            <span>5km</span>
+            <span>{DISTANCE_MAX}km</span>
+          </div>
+        </KnobCard>
+      )}
+
+      <KnobCard
+        icon={WalletCards}
+        title={`予算（${people}名・上限）`}
+        value={formatYen(budget)}
+      >
+        <input
+          type="range"
+          min={BUDGET_MIN}
+          max={budgetMax}
+          step={1000}
+          value={budget}
+          onChange={(event) => setBudget(Number(event.target.value))}
+          className="range-brand"
+          style={
+            {
+              "--fill": `${sliderFill(budget, BUDGET_MIN, budgetMax)}%`,
+            } as React.CSSProperties
+          }
+        />
+        <div className="mt-1 flex justify-between text-[10px] font-bold text-[color:var(--muted)]">
+          <span>{formatYen(BUDGET_MIN)}</span>
+          <span>{formatYen(budgetMax)}</span>
+        </div>
+        {(bikeOnly || nights > 0) && (
+          <p className="mt-1.5 text-[11px] font-medium leading-5 text-[color:var(--muted)]">
+            {bikeOnly &&
+              `自転車なので交通費は0円。食事・入場料${nights ? "・宿代" : ""}に使う予算です。`}
+            {nights > 0 &&
+              `宿代の目安 ${formatYen(lodgingTotal)}（${lodgingInfo[lodging].labelJa}・${nights}泊）も含めて計算します。`}
+          </p>
+        )}
+      </KnobCard>
+
+      <KnobCard icon={CalendarDays} title="旅の日数">
+        <div className="grid grid-cols-3 gap-2">
+          {tripLengthOptions.map((option) => {
+            const Icon = tripLengthIcons[option.id];
+            const active = tripLength === option.id;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setTripLength(option.id)}
+                className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-bold transition ${
+                  active
+                    ? "border-vermilion bg-vermilion/10 text-vermilion"
+                    : "border-[color:var(--line)] bg-[color:var(--surface-muted)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                }`}
+              >
+                <Icon size={18} />
+                {option.labelJa}
+                <span className="text-[10px] font-medium opacity-70">
+                  {bikeOnly
+                    ? option.id === "day"
+                      ? `1日${bikeRange}km`
+                      : `1日${bikeHalf}km${option.id === "two-night" ? "＋中日" : ""}`
+                    : `片道〜${Math.round(option.maxOneWayMinutes / 60)}h`}
+                </span>
+              </button>
+            );
+          })}
         </div>
       </KnobCard>
+
+      {nights > 0 && (
+        <KnobCard icon={BedDouble} title="泊まる宿（1名1泊の目安）">
+          <div className="grid grid-cols-3 gap-2">
+            {lodgingTypes.map((type) => {
+              const active = lodging === type;
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => setLodging(type)}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl border px-1 py-2.5 text-[11px] font-bold transition ${
+                    active
+                      ? "border-vermilion bg-vermilion/10 text-vermilion"
+                      : "border-[color:var(--line)] bg-[color:var(--surface-muted)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+                  }`}
+                >
+                  {lodgingInfo[type].labelJa}
+                  <span className="text-[10px] font-medium opacity-70">
+                    {formatYen(lodgingInfo[type].yenPerNight)}〜
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <p className="mt-1.5 text-[11px] font-medium text-[color:var(--muted)]">
+            実際の料金は宿や時期で変わります。
+          </p>
+        </KnobCard>
+      )}
+
+      {usableModes.some((mode) => mode === "train" || mode === "shinkansen") && (
+        <KnobCard icon={Ticket} title="乗り継ぎ（タクシー等）">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs font-medium text-[color:var(--muted)]">
+              鉄道の旅にラストワンマイルのタクシーを許可します
+            </span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={allowTransfer}
+              aria-label="乗り継ぎを許可"
+              onClick={() => setAllowTransfer((value) => !value)}
+              className={`relative h-6 w-11 shrink-0 rounded-full transition ${
+                allowTransfer ? "bg-vermilion" : "bg-[color:var(--line)]"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-all ${
+                  allowTransfer ? "left-[22px]" : "left-0.5"
+                }`}
+              />
+            </button>
+          </div>
+        </KnobCard>
+      )}
     </div>
   );
 
@@ -2433,6 +2514,8 @@ export function JourneyExperience() {
                   </p>
                   <p className="mt-2 text-[10px] text-[color:var(--muted)]">
                     {transportLabel(journey.transport, journey.transfer)}での目安
+                    {journey.transport === "bicycle" &&
+                      `（往復${journey.distanceKm * 2}km${journey.nights ? `・帰りは${journey.nights + 1}日目` : ""}）`}
                   </p>
                 </div>
                 <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
@@ -2447,7 +2530,8 @@ export function JourneyExperience() {
                     {formatYen(journey.estimatedBudget.total)}
                   </p>
                   <p className="mt-2 text-[10px] text-[color:var(--muted)]">
-                    {journey.people}名・日帰り合計
+                    {journey.people}名・
+                    {journey.nights ? `${journey.nights}泊${journey.nights + 1}日` : "日帰り"}合計
                     {journey.people > 1 &&
                       `（1名あたり約${formatYen(
                         Math.round(journey.estimatedBudget.total / journey.people),
@@ -2495,6 +2579,18 @@ export function JourneyExperience() {
                       {formatYen(journey.estimatedBudget.foodCost)}
                     </dd>
                   </div>
+                  {journey.estimatedBudget.lodgingCost ? (
+                    <div className="flex items-center justify-between">
+                      <dt className="flex items-center gap-2 text-[color:var(--muted)]">
+                        <BedDouble size={16} /> 宿泊
+                        {journey.lodging &&
+                          `（${lodgingInfo[journey.lodging].labelJa}・${journey.nights}泊）`}
+                      </dt>
+                      <dd className="font-bold">
+                        {formatYen(journey.estimatedBudget.lodgingCost)}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
                 <p className="mt-4 text-[10px] text-[color:var(--muted)]">
                   費用は距離とカテゴリから算出した目安です。実際の料金を保証するものではありません。
