@@ -12,6 +12,7 @@ import {
   LocateFixed,
   MapPinCheck,
   Navigation,
+  X,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -33,6 +34,7 @@ import { upsertJourneyStatus } from "@/lib/api/trips";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import {
   arrivalRadiusKm,
+  cancelTrip,
   checkArrival,
   directionsUrl,
   endTrip,
@@ -78,6 +80,8 @@ export default function TravelPage() {
   const [sights, setSights] = useState<Sight[]>([]);
   const [food, setFood] = useState<FoodPlace[]>([]);
   const [ended, setEnded] = useState<JourneyResult | null>(null);
+  const [cancelled, setCancelled] = useState<JourneyResult | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState(false);
   const autoArrived = useRef(false);
 
   const phase = !trip ? "none" : trip.finishedAt ? "finish" : trip.arrivedAt ? "exploring" : "enroute";
@@ -159,6 +163,14 @@ export default function TravelPage() {
     setEnded(journey);
   }
 
+  async function cancel() {
+    if (!trip) return;
+    const journey = trip.journey;
+    setConfirmCancel(false);
+    await cancelTrip(trip, user?.uid);
+    setCancelled(journey);
+  }
+
   function endAfterRecord() {
     if (!trip) return;
     const journey = trip.journey;
@@ -170,7 +182,27 @@ export default function TravelPage() {
     return (
       <section className="mx-auto flex min-h-[calc(100vh-4rem)] max-w-lg flex-col items-center justify-center px-5 pb-16 pt-28 text-center">
         <TabiSprite pose={ended ? "camera" : "map"} className="aspect-[538/422] w-48" />
-        {ended ? (
+        {cancelled && !ended ? (
+          <>
+            <h1 className="mt-4 font-display text-2xl font-bold">旅をやめました</h1>
+            <p className="mt-2 text-sm leading-7 text-[color:var(--muted)]">
+              {user
+                ? `${displayPlaceName(cancelled.destination.name)}は旅ノートに残してあるよ。また行きたくなったら、いつでも。`
+                : "また行きたくなったら、いつでも。"}
+            </p>
+            <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+              <Link href="/" className="scene-cta justify-center">
+                <Compass size={16} /> 別の行き先をさがす
+              </Link>
+              <Link
+                href="/saved"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--line)] px-6 py-3.5 text-sm font-bold"
+              >
+                旅ノートを見る
+              </Link>
+            </div>
+          </>
+        ) : ended ? (
           <>
             <p className="mt-4 text-[11px] font-black tracking-[0.3em] text-vermilion">旅、完了！</p>
             <h1 className="mt-2 font-display text-3xl font-bold">おつかれさま！</h1>
@@ -240,12 +272,42 @@ export default function TravelPage() {
         </div>
       )}
 
-      <Link
-        href="/tabi"
-        className="inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-      >
-        <ArrowLeft size={14} /> タビパッド
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/tabi"
+          className="inline-flex items-center gap-1.5 text-xs font-bold text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
+        >
+          <ArrowLeft size={14} /> タビパッド
+        </Link>
+        {phase !== "finish" &&
+          (confirmCancel ? (
+            <span className="scene-glass inline-flex items-center gap-2 rounded-full py-1 pl-3 pr-1 text-xs font-bold">
+              この旅をやめる？
+              <button
+                type="button"
+                onClick={() => void cancel()}
+                className="rounded-full bg-vermilion px-3 py-1.5 text-white"
+              >
+                やめる
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmCancel(false)}
+                className="rounded-full px-3 py-1.5 text-[color:var(--muted)]"
+              >
+                つづける
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmCancel(true)}
+              className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--muted)] hover:text-vermilion"
+            >
+              <X size={14} /> 旅をやめる
+            </button>
+          ))}
+      </div>
 
       {/* Hero + progress */}
       <div className="scene-glass mt-3 overflow-clip rounded-[30px]">

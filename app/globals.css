@@ -950,10 +950,12 @@ html[data-os="on"] .trip-bar {
   filter: brightness(0.85);
 }
 
-/* Phones: the dock scrolls sideways; fade the edges as a hint. */
+/* Phones: the dock scrolls sideways with native momentum (no snapping —
+   it cut the glide short); fade the edges as a hint. */
 @media (max-width: 767px) {
   .os-dock-scroll {
-    scroll-snap-type: x proximity;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
     -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
     mask-image: linear-gradient(90deg, transparent 0, #000 10px, #000 calc(100% - 22px), transparent 100%);
   }

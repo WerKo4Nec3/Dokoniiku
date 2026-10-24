@@ -98,7 +98,7 @@ export function TabiOSFrame() {
                     href={item.href}
                     aria-label={item.name}
                     aria-current={active ? "page" : undefined}
-                    className="group relative shrink-0 snap-center transition-transform hover:-translate-y-1"
+                    className="group relative shrink-0 transition-transform hover:-translate-y-1"
                   >
                     <AppIcon app={item} size="sm" />
                     <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[color:var(--foreground)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--background)] opacity-0 transition group-hover:opacity-100 md:block">

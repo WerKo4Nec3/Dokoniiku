@@ -42,6 +42,15 @@ export function endTrip() {
   storeActiveTrip(null);
 }
 
+// Give up on the open trip. Not there yet → the place goes back to 計画中 in
+// the 旅ノート; already arrived → the visit still counts (完了).
+export async function cancelTrip(trip: ActiveTrip, uid?: string) {
+  endTrip();
+  if (uid) {
+    await upsertJourneyStatus(uid, trip.journey, trip.arrivedAt ? "done" : "planned").catch(() => {});
+  }
+}
+
 // Done exploring → the record step (or back to exploring with null).
 export function setTripFinished(trip: ActiveTrip, finished: boolean) {
   storeActiveTrip({ ...trip, finishedAt: finished ? new Date().toISOString() : undefined });

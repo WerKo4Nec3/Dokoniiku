@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -9,7 +9,7 @@ import { isOSPath } from "@/components/tabi-os/apps";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { fetchActiveTrip, saveActiveTrip } from "@/lib/api/trips";
 import { storeActiveTrip } from "@/lib/storage/activeTrip";
-import { readActiveTrip, useActiveTrip } from "@/lib/trips";
+import { cancelTrip, readActiveTrip, useActiveTrip } from "@/lib/trips";
 import { displayPlaceName } from "@/lib/utils/travel";
 
 // Keeps the local trip and the account copy in step: on sign-in the newer
@@ -55,7 +55,9 @@ function useTripSync() {
 export function ActiveTripBar() {
   useTripSync();
   const trip = useActiveTrip();
+  const { user } = useAuth();
   const pathname = usePathname();
+  const [confirming, setConfirming] = useState(false);
   const visible = Boolean(trip) && !pathname.startsWith("/admin") && pathname !== "/travel";
 
   useEffect(() => {
@@ -82,42 +84,83 @@ export function ActiveTripBar() {
           compact ? "max-w-[min(15rem,46vw)] rounded-full" : "max-w-md rounded-[26px]"
         }`}
       >
-        <Link
-          href="/travel"
-          className={`flex w-full items-center text-left ${compact ? "gap-2 px-1.5 py-1" : "gap-3 px-3 py-2.5"}`}
-        >
-          <span
-            className={`relative grid shrink-0 place-items-center overflow-hidden bg-forest/15 ${
-              compact ? "h-6 w-6 rounded-full" : "h-10 w-10 rounded-2xl"
+        {confirming ? (
+          <div
+            className={`flex items-center justify-between gap-2 text-xs font-bold ${
+              compact ? "px-3 py-1" : "px-4 py-3"
             }`}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={trip.journey.destination.imageUrl ?? "/mascot/walking.png"}
-              alt=""
-              className="h-full w-full object-cover"
-            />
-            {!trip.arrivedAt && (
-              <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 animate-pulse rounded-full border-2 border-white bg-vermilion" />
-            )}
-          </span>
-          {compact ? (
-            <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[color:var(--foreground)]">
-              <span className="text-vermilion">{status}</span>・{name}
+            <span className="truncate">旅をやめる？</span>
+            <span className="flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirming(false);
+                  void cancelTrip(trip, user?.uid);
+                }}
+                className="rounded-full bg-vermilion px-3 py-1 text-white"
+              >
+                やめる
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirming(false)}
+                className="rounded-full px-2 py-1 text-[color:var(--muted)]"
+              >
+                つづける
+              </button>
             </span>
-          ) : (
-            <span className="min-w-0 flex-1">
-              <span className="block text-[10px] font-bold tracking-[0.2em] text-vermilion">{status}</span>
-              <span className="block truncate text-sm font-bold text-[color:var(--foreground)]">
-                {name}
-                <span className="ml-1.5 text-xs font-medium text-[color:var(--muted)]">
-                  {trip.journey.prefecture.nameJa}
-                </span>
+          </div>
+        ) : (
+          <div className="flex items-center">
+            <Link
+              href="/travel"
+              className={`flex min-w-0 flex-1 items-center text-left ${compact ? "gap-2 py-1 pl-1.5" : "gap-3 py-2.5 pl-3"}`}
+            >
+              <span
+                className={`relative grid shrink-0 place-items-center overflow-hidden bg-forest/15 ${
+                  compact ? "h-6 w-6 rounded-full" : "h-10 w-10 rounded-2xl"
+                }`}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={trip.journey.destination.imageUrl ?? "/mascot/walking.png"}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+                {!trip.arrivedAt && (
+                  <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 animate-pulse rounded-full border-2 border-white bg-vermilion" />
+                )}
               </span>
-            </span>
-          )}
-          <ChevronRight size={compact ? 14 : 18} className="shrink-0 text-[color:var(--muted)]" />
-        </Link>
+              {compact ? (
+                <span className="min-w-0 flex-1 truncate text-[11px] font-bold text-[color:var(--foreground)]">
+                  <span className="text-vermilion">{status}</span>・{name}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[10px] font-bold tracking-[0.2em] text-vermilion">{status}</span>
+                  <span className="block truncate text-sm font-bold text-[color:var(--foreground)]">
+                    {name}
+                    <span className="ml-1.5 text-xs font-medium text-[color:var(--muted)]">
+                      {trip.journey.prefecture.nameJa}
+                    </span>
+                  </span>
+                </span>
+              )}
+              <ChevronRight size={compact ? 14 : 18} className="shrink-0 text-[color:var(--muted)]" />
+            </Link>
+            <button
+              type="button"
+              aria-label="旅をやめる"
+              onClick={() => setConfirming(true)}
+              className={`grid shrink-0 place-items-center rounded-full text-[color:var(--muted)] transition hover:text-vermilion ${
+                compact ? "mr-1 h-6 w-6" : "mr-2 h-8 w-8"
+              }`}
+            >
+              <X size={compact ? 13 : 16} />
+            </button>
+          </div>
+        )}
       </motion.div>
     </div>
   );
