@@ -4,7 +4,7 @@ import { LayoutGroup, motion, useReducedMotion } from "framer-motion";
 import { BatteryMedium, LayoutGrid, Radio, Wifi, Wind } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useLiveShare } from "@/lib/live";
 import { AppIcon, useClock } from "./AppIcon";
 import { OS_HOME, TABI_APPS, appForPath, isOSPath } from "./apps";
@@ -20,17 +20,28 @@ export function TabiOSFrame() {
   const sharing = useLiveShare();
   const reduce = useReducedMotion();
 
+  const home = pathname === OS_HOME;
+  const activeRef = useRef<HTMLAnchorElement>(null);
+
   useEffect(() => {
     const root = document.documentElement;
     if (on) root.dataset.os = "on";
     else delete root.dataset.os;
+    // The home screen already shows every app, so it has no dock.
+    if (on && home) root.dataset.osDock = "off";
+    else delete root.dataset.osDock;
     return () => {
       delete root.dataset.os;
+      delete root.dataset.osDock;
     };
-  }, [on]);
+  }, [on, home]);
+
+  // Keep the open app visible in the (scrollable) dock.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ inline: "center", block: "nearest" });
+  }, [pathname]);
 
   if (!on) return null;
-  const home = pathname === OS_HOME;
   const dockApps = TABI_APPS.filter((item) => !item.adminOnly);
 
   return (
@@ -65,40 +76,42 @@ export function TabiOSFrame() {
         </span>
       </div>
 
-      <nav aria-label="タビパッド" className="os-dock">
-        <LayoutGroup id="os-dock">
-          <Link
-            href={OS_HOME}
-            aria-label="ホーム"
-            aria-current={home ? "page" : undefined}
-            className="relative grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[color:var(--foreground)] text-[color:var(--background)] sm:h-12 sm:w-12"
-          >
-            <LayoutGrid size={20} />
-            {home && <DockDot reduce={reduce} />}
-          </Link>
-          <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-[color:var(--line)]" />
-          {dockApps.map((item) => {
-            const active = app?.id === item.id;
-            return (
-              <Link
-                key={item.id}
-                href={item.href}
-                aria-label={item.name}
-                aria-current={active ? "page" : undefined}
-                className={`group relative shrink-0 transition-transform hover:-translate-y-1 ${
-                  item.dock ? "" : "hidden md:block"
-                }`}
-              >
-                <AppIcon app={item} size="sm" />
-                <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[color:var(--foreground)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--background)] opacity-0 transition group-hover:opacity-100 md:block">
-                  {item.name}
-                </span>
-                {active && <DockDot reduce={reduce} />}
-              </Link>
-            );
-          })}
-        </LayoutGroup>
-      </nav>
+      {!home && (
+        <nav aria-label="タビパッド" className="os-dock">
+          <LayoutGroup id="os-dock">
+            <Link
+              href={OS_HOME}
+              aria-label="ホーム"
+              className="relative grid h-11 w-11 shrink-0 place-items-center rounded-[13px] bg-[color:var(--foreground)] text-[color:var(--background)] sm:h-12 sm:w-12"
+            >
+              <LayoutGrid size={20} />
+            </Link>
+            <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-[color:var(--line)]" />
+            {/* Every app; swipe sideways on phones. */}
+            <div className="os-dock-scroll no-scrollbar flex min-w-0 items-center gap-2.5 overflow-x-auto py-2 pr-1 md:overflow-visible">
+              {dockApps.map((item) => {
+                const active = app?.id === item.id;
+                return (
+                  <Link
+                    key={item.id}
+                    ref={active ? activeRef : undefined}
+                    href={item.href}
+                    aria-label={item.name}
+                    aria-current={active ? "page" : undefined}
+                    className="group relative shrink-0 snap-center transition-transform hover:-translate-y-1"
+                  >
+                    <AppIcon app={item} size="sm" />
+                    <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[color:var(--foreground)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--background)] opacity-0 transition group-hover:opacity-100 md:block">
+                      {item.name}
+                    </span>
+                    {active && <DockDot reduce={reduce} />}
+                  </Link>
+                );
+              })}
+            </div>
+          </LayoutGroup>
+        </nav>
+      )}
     </>
   );
 }
