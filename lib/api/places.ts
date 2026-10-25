@@ -38,14 +38,33 @@ const adminAreaPattern = /(村|町|市|区|郡|地方|半島|平野|盆地|都�
 // Wikipedia organises places into per-prefecture categories such as
 // "奈良県の温泉" or "京都府の城". Each genre maps to a few of these; a word
 // with no such category in some prefecture just matches nothing there.
+// (All words together must stay under 50: the clcategories limit.)
 const categoryWikiWords: Record<DestinationCategory, string[]> = {
-  nature: ["自然公園", "公園", "山", "峠", "島", "滝", "渓谷", "湖", "高原", "海岸"],
-  history: ["城", "史跡", "古墳", "遺跡"],
-  shrine: ["神社", "寺"],
-  museum: ["博物館", "美術館", "資料館"],
+  nature: [
+    "自然公園", "公園", "山", "峠", "島", "滝", "渓谷", "湖", "高原", "海岸",
+    "自然景勝地", "地形",
+  ],
+  history: [
+    "城", "史跡", "古墳", "遺跡", "考古遺跡", "重要文化財", "国宝", "登録有形文化財", "民家",
+  ],
+  shrine: ["神社", "寺", "旧県社", "旧府社", "旧郷社", "旧村社"],
+  museum: ["博物館", "美術館", "資料館", "科学館"],
   "hot-spring": ["温泉"],
-  food: ["道の駅", "酒蔵"],
-  viewpoint: ["展望台", "タワー", "灯台", "山", "峠"],
+  food: ["道の駅", "酒蔵", "日本酒メーカー", "酒"],
+  viewpoint: ["展望台", "タワー", "灯台", "ダム", "山", "峠", "自然景勝地"],
+};
+
+// Categories whose subcategories (by city, e.g. "京都市の寺院") hold many
+// more places than the prefecture-level category itself; searched with
+// `deepcat`, which takes one category per query.
+const deepWikiRoots: Record<DestinationCategory, string[]> = {
+  nature: ["自然景勝地", "公園"],
+  history: ["城", "古墳", "考古遺跡"],
+  shrine: ["神社", "寺"],
+  museum: ["博物館", "美術館"],
+  "hot-spring": ["温泉"],
+  food: ["道の駅", "日本酒メーカー"],
+  viewpoint: ["自然景勝地", "山"],
 };
 
 const allGenres = Object.keys(categoryWikiWords) as DestinationCategory[];
@@ -144,79 +163,126 @@ async function wikiQuery(params: Record<string, string>): Promise<WikiQueryRespo
   }
 }
 
-// Every geo-located article in the prefecture's categories for these genres
-// (all genres when empty), in one OR'd search instead of a request per
-// category. `near` keeps only places within reach, so the 500-result pages
-// are spent where the trip can actually go.
-async function searchCategoryPlaces(
-  prefecture: Prefecture,
-  genres: DestinationCategory[],
-  near?: NearFilter,
-): Promise<Destination[]> {
-  const wordGenres = new Map<string, DestinationCategory[]>();
-  for (const genre of genres.length ? genres : allGenres) {
-    for (const word of categoryWikiWords[genre]) {
-      wordGenres.set(word, [...(wordGenres.get(word) ?? []), genre]);
-    }
-  }
-  // Generic sights for the no-genre search; their genre comes from the title.
-  if (!genres.length) wordGenres.set("観光地", []);
+type SearchHit = {
+  title: string;
+  lat?: number;
+  lon?: number;
+  categories: string[];
+};
 
-  const prefix = `Category:${prefecture.nameJa}の`;
-  const categories = [...wordGenres.keys()].map((word) => `${prefecture.nameJa}の${word}`);
-  let search = `incategory:"${categories.join("|")}"`;
-  if (near) {
-    search += ` nearcoord:${Math.ceil(near.radiusKm)}km,${near.latitude.toFixed(4)},${near.longitude.toFixed(4)}`;
-  }
-
-  const found = new Map<number, { title: string; lat: number; lon: number; genres: Set<DestinationCategory> }>();
+// One search (up to two pages of 500), with each page's coordinates and,
+// when given, which of `categories` it belongs to.
+async function searchPages(
+  search: string,
+  categories?: string[],
+): Promise<Map<number, SearchHit>> {
+  const pages = new Map<number, SearchHit>();
   let next: Record<string, string> = {};
   let searchPages = 0;
-  // Page through category info (clcontinue) for up to two pages of results.
+  // Category info pages through clcontinue before the next search page.
   for (let round = 0; round < 8; round += 1) {
     const result = await wikiQuery({
       generator: "search",
       gsrsearch: search,
       gsrlimit: "500",
       gsrnamespace: "0",
-      prop: "coordinates|categories",
+      prop: categories ? "coordinates|categories" : "coordinates",
       colimit: "max",
-      cllimit: "max",
-      clcategories: categories.map((name) => `Category:${name}`).join("|"),
+      ...(categories
+        ? {
+            cllimit: "max",
+            clcategories: categories.map((name) => `Category:${name}`).join("|"),
+          }
+        : {}),
       ...next,
     });
     for (const page of result.query?.pages ?? []) {
-      const entry = found.get(page.pageid);
+      const hit = pages.get(page.pageid) ?? { title: page.title, categories: [] };
       const coordinate = page.coordinates?.[0];
-      if (!entry && !coordinate) continue;
-      const item = entry ?? {
-        title: page.title,
-        lat: coordinate!.lat,
-        lon: coordinate!.lon,
-        genres: new Set<DestinationCategory>(),
-      };
-      for (const category of page.categories ?? []) {
-        const word = category.title.startsWith(prefix) ? category.title.slice(prefix.length) : "";
-        for (const genre of wordGenres.get(word) ?? []) item.genres.add(genre);
+      if (coordinate) {
+        hit.lat = coordinate.lat;
+        hit.lon = coordinate.lon;
       }
-      found.set(page.pageid, item);
+      for (const category of page.categories ?? []) hit.categories.push(category.title);
+      pages.set(page.pageid, hit);
     }
     if (result.batchcomplete) searchPages += 1;
     if (!result.continue || (result.batchcomplete && searchPages >= 2)) break;
     next = result.continue;
   }
+  return pages;
+}
+
+// Every geo-located article for these genres (all genres when empty) in the
+// prefecture: one OR'd search over its categories — the page's categories
+// tell its genre — plus `deepcat` searches that also reach the per-city
+// subcategories. `near` keeps only places within reach, so the result pages
+// are spent where the trip can actually go.
+async function searchCategoryPlaces(
+  prefecture: Prefecture,
+  genres: DestinationCategory[],
+  near?: NearFilter,
+): Promise<Destination[]> {
+  const wanted = genres.length ? genres : allGenres;
+  const wordGenres = new Map<string, DestinationCategory[]>();
+  for (const genre of wanted) {
+    for (const word of categoryWikiWords[genre]) {
+      wordGenres.set(word, [...(wordGenres.get(word) ?? []), genre]);
+    }
+  }
+  // Generic sights for the no-genre search; their genre comes from the title.
+  if (!genres.length) wordGenres.set("観光地", []);
+  const roots = genres.length
+    ? genres.flatMap((genre) => deepWikiRoots[genre].map((root) => ({ root, genre })))
+    : [{ root: "観光地", genre: undefined }];
+
+  const area = near
+    ? ` nearcoord:${Math.ceil(near.radiusKm)}km,${near.latitude.toFixed(4)},${near.longitude.toFixed(4)}`
+    : "";
+  const prefix = `Category:${prefecture.nameJa}の`;
+  const categories = [...wordGenres.keys()].map((word) => `${prefecture.nameJa}の${word}`);
+  const [byCategory, ...deep] = await Promise.all([
+    searchPages(`incategory:"${categories.join("|")}"${area}`, categories),
+    // A tree too big for deepcat just comes back empty.
+    ...roots.map(({ root }) =>
+      searchPages(`deepcat:"${prefecture.nameJa}の${root}"${area}`).catch(
+        () => new Map<number, SearchHit>(),
+      ),
+    ),
+  ]);
+
+  const found = new Map<number, { hit: SearchHit; genres: Set<DestinationCategory> }>();
+  const add = (pageid: number, hit: SearchHit, genresOfHit: DestinationCategory[]) => {
+    if (hit.lat == null || hit.lon == null) return;
+    const entry = found.get(pageid) ?? { hit, genres: new Set<DestinationCategory>() };
+    for (const genre of genresOfHit) entry.genres.add(genre);
+    found.set(pageid, entry);
+  };
+  for (const [pageid, hit] of byCategory) {
+    add(
+      pageid,
+      hit,
+      hit.categories.flatMap((title) =>
+        title.startsWith(prefix) ? (wordGenres.get(title.slice(prefix.length)) ?? []) : [],
+      ),
+    );
+  }
+  deep.forEach((pages, index) => {
+    const genre = roots[index].genre;
+    for (const [pageid, hit] of pages) add(pageid, hit, genre ? [genre] : []);
+  });
 
   return [...found.entries()]
-    .filter(([, item]) => item.title.trim() && !adminAreaPattern.test(item.title))
-    .map(([pageid, item]) => ({
+    .filter(([, { hit }]) => hit.title.trim() && !adminAreaPattern.test(hit.title))
+    .map(([pageid, { hit, genres: genresOfHit }]) => ({
       id: `wiki-${pageid}`,
-      name: item.title,
+      name: hit.title,
       prefectureId: prefecture.id,
-      latitude: item.lat,
-      longitude: item.lon,
-      categories: item.genres.size
-        ? allGenres.filter((genre) => item.genres.has(genre))
-        : mapCategoryFromTitle(item.title),
+      latitude: hit.lat!,
+      longitude: hit.lon!,
+      categories: genresOfHit.size
+        ? allGenres.filter((genre) => genresOfHit.has(genre))
+        : mapCategoryFromTitle(hit.title),
       description: buildDescription(prefecture),
     }));
 }
