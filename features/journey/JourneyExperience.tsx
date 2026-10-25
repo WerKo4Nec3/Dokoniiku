@@ -47,7 +47,12 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { DEFAULT_START, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
-import { getAttractionsByPrefecture } from "@/lib/api/places";
+import {
+  getAttractionsByPrefecture,
+  getAttractionsNear,
+  getPlaceThumbnails,
+  type NearFilter,
+} from "@/lib/api/places";
 import {
   fetchRecentForUser,
   saveJourneyForUser,
@@ -86,6 +91,7 @@ import {
 import { buildShareCard } from "@/lib/share/shareCard";
 import {
   allTransportModes,
+  bearingOffset,
   bestTransport,
   bikeOneWayKm,
   categoryLabels,
@@ -371,6 +377,12 @@ const DISTANCE_MAX = 800;
 const BIKE_RANGE_MIN = 20;
 const BIKE_RANGE_MAX = 300;
 const SHUFFLE_COUNT = 4;
+// Up to this one-way reach, the prefecture is chosen from the places actually
+// within reach in the compass direction (beyond it, by its capital).
+const SCOUT_MAX_REACH_KM = 150;
+// Compass cones tried in turn until enough places fall inside one.
+const SECTOR_STEPS = [22.5, 45, 67.5, 90, 180];
+const MIN_SECTOR_PLACES = 5;
 
 // Gemini-powered place insight is optional; the UI only appears when enabled.
 const aiEnabled = process.env.NEXT_PUBLIC_GEMINI_ENABLED === "true";
@@ -456,7 +468,12 @@ export function JourneyExperience() {
   const [candidateCache, setCandidateCache] = useState<{
     key: string;
     candidates: Destination[];
+    radiusKm: number;
   } | null>(null);
+  // Short trips: the compass cone (degrees either side) the prefecture was
+  // picked with, so destinations favour places in that direction too.
+  const [sector, setSector] = useState<number | null>(null);
+  const [scouting, setScouting] = useState(false);
   // Party-total budget cap grows with the headcount so large groups aren't
   // stuck under a fixed ¥100,000 ceiling that no plan can ever satisfy.
   const budgetMax = Math.max(BUDGET_MIN, BUDGET_PER_PERSON_MAX * people);
@@ -717,6 +734,12 @@ export function JourneyExperience() {
     maxDistanceKm: distanceCap,
     bikeRangeKm: cycling ? bikeRange : undefined,
   });
+  // Custom searches only look within reach (with a little margin), so the
+  // results are spent on places the trip can actually get to.
+  const nearFilter: NearFilter | undefined =
+    journeyMode === "custom" && reach <= 300
+      ? { latitude: start.latitude, longitude: start.longitude, radiusKm: reach + 5 }
+      : undefined;
 
   // Custom mode: which fetched places fit the budget, time/range and modes.
   function feasiblePlans(candidates: Destination[]): Plan[] {
@@ -749,6 +772,8 @@ export function JourneyExperience() {
     setNotice(null);
     setFilterNotice(null);
     setSelecting(true);
+    // Start looking around while the needle spins.
+    if (journeyMode === "custom" && reach <= SCOUT_MAX_REACH_KM) void scoutAround();
 
     window.setTimeout(() => {
       setDirection(pickDirection());
@@ -768,8 +793,68 @@ export function JourneyExperience() {
     setShuffleOptions([]);
   }
 
-  function choosePrefecture(exclude?: string) {
-    if (!direction) return;
+  // Every place within reach in the prefectures around the start.
+  function scoutAround(): Promise<Map<string, Destination[]>> {
+    const around = prefectures
+      .map((item) => ({ item, km: haversineDistanceKm(start, item) }))
+      .filter(({ km }) => km <= reach + 120)
+      .sort((a, b) => a.km - b.km)
+      .slice(0, 10)
+      .map(({ item }) => item);
+    return getAttractionsNear(around, nearFilter!);
+  }
+
+  // Short trips: pick a prefecture by where the reachable places in the
+  // compass direction actually are — widening the cone when that direction
+  // is empty (out to sea, say). Bigger clusters are likelier picks.
+  async function scoutPrefecture(
+    towards: Direction,
+    exclude?: string,
+  ): Promise<{ prefecture: Prefecture; sector: number } | null> {
+    const found = await scoutAround();
+    const offsets: { id: string; offset: number }[] = [];
+    for (const [id, places] of found) {
+      if (id === exclude) continue;
+      for (const plan of feasiblePlans(places)) {
+        offsets.push({ id, offset: bearingOffset(start, plan.destination, towards) });
+      }
+    }
+    for (const cone of SECTOR_STEPS) {
+      const counts = new Map<string, number>();
+      for (const item of offsets) {
+        if (item.offset <= cone) counts.set(item.id, (counts.get(item.id) ?? 0) + 1);
+      }
+      const total = [...counts.values()].reduce((sum, count) => sum + count, 0);
+      if (total < MIN_SECTOR_PLACES && cone < 180) continue;
+      if (!total) return null;
+      let ticket = Math.random() * total;
+      for (const [id, count] of counts) {
+        ticket -= count;
+        if (ticket < 0) {
+          const prefecture = prefectures.find((item) => item.id === id);
+          return prefecture ? { prefecture, sector: cone } : null;
+        }
+      }
+    }
+    return null;
+  }
+
+  async function choosePrefecture(exclude?: string) {
+    if (!direction || scouting) return;
+    if (journeyMode === "custom" && reach <= SCOUT_MAX_REACH_KM) {
+      setScouting(true);
+      const scouted = await scoutPrefecture(direction, exclude).catch(() => null);
+      setScouting(false);
+      if (scouted) {
+        setPrefecture(scouted.prefecture);
+        setSector(scouted.sector);
+        setFilterNotice(null);
+        setStage("prefecture");
+        return;
+      }
+      // Nothing found (or offline): fall back to picking by capital.
+    }
+    setSector(null);
     let pool: Prefecture[];
     if (journeyMode === "custom") {
       // Custom: only prefectures this trip can actually reach (their capital
@@ -808,18 +893,26 @@ export function JourneyExperience() {
     setNotice(null);
     setFilterNotice(null);
 
-    const places = await getAttractionsByPrefecture(prefecture, selectedCategories);
+    const near = nearFilter;
+    const places = await getAttractionsByPrefecture(prefecture, selectedCategories, near);
     // Drop places the community disliked (and ones you 👎'd yourself).
     const excluded = await getExcludedPlaceIds(user?.uid);
     const candidates = places.data.filter((place) => !excluded.has(place.id));
 
-    setCandidateCache({ key: `${prefecture.id}|${selectedCategories.join(",")}`, candidates });
+    setCandidateCache({
+      key: `${prefecture.id}|${selectedCategories.join(",")}`,
+      candidates,
+      radiusKm: near?.radiusKm ?? Infinity,
+    });
 
     if (!candidates.length) {
+      const genre = selectedCategories.length ? "選んだジャンルの場所" : "候補";
       setFilterNotice(
-        "選んだジャンルに合う場所が見つかりませんでした。ジャンルを変えるか、メインに戻って別の方角を試してみてね。",
+        near
+          ? `片道 約${reach}km以内の${prefecture.nameJa}には、${genre}が見つかりませんでした。${selectedCategories.length ? "ジャンルを変えるか、" : ""}行ける範囲の都道府県で探してみてね。`
+          : "選んだジャンルに合う場所が見つかりませんでした。ジャンルを変えるか、メインに戻って別の方角を試してみてね。",
       );
-      setFiltersOpen(true);
+      if (selectedCategories.length) setFiltersOpen(true);
       setStage("prefecture");
       return null;
     }
@@ -827,6 +920,13 @@ export function JourneyExperience() {
     let plans: Plan[];
     if (journeyMode === "custom") {
       plans = feasiblePlans(candidates);
+      // Favour the compass direction when it still leaves a real choice.
+      if (sector !== null && direction) {
+        const ahead = plans.filter(
+          (plan) => bearingOffset(start, plan.destination, direction) <= sector,
+        );
+        if (ahead.length >= 3) plans = ahead;
+      }
       if (!plans.length) {
         // Say why: how far this trip reaches vs. the closest place here.
         const nearest = Math.min(...candidates.map((item) => haversineDistanceKm(start, item)));
@@ -1004,29 +1104,41 @@ export function JourneyExperience() {
     const built = await buildPlans();
     if (!built) return;
     setShufflePool(built);
-    setShuffleOptions(
-      sampleWithPreference(built.plans, SHUFFLE_COUNT, readPreferences()),
-    );
+    dealCards(sampleWithPreference(built.plans, SHUFFLE_COUNT, readPreferences()));
     setStage("shuffle");
+  }
+
+  // Show a hand of cards, then fill in photos (bulk searches come without).
+  function dealCards(hand: Plan[]) {
+    setShuffleOptions(hand);
+    const bare = hand.filter((plan) => !plan.destination.imageUrl);
+    if (!bare.length) return;
+    void getPlaceThumbnails(bare.map((plan) => plan.destination)).then((thumbnails) => {
+      if (!thumbnails.size) return;
+      setShuffleOptions((current) =>
+        current.map((plan) => {
+          const imageUrl = thumbnails.get(plan.destination.id);
+          return imageUrl && !plan.destination.imageUrl
+            ? { ...plan, destination: { ...plan.destination, imageUrl } }
+            : plan;
+        }),
+      );
+    });
   }
 
   function reshuffle() {
     if (!shufflePool) return;
-    setShuffleOptions((current) => {
-      const shown = new Set(current.map((plan) => plan.destination.id));
-      const fresh = shufflePool.plans.filter(
-        (plan) => !shown.has(plan.destination.id),
+    const shown = new Set(shuffleOptions.map((plan) => plan.destination.id));
+    const fresh = shufflePool.plans.filter((plan) => !shown.has(plan.destination.id));
+    // Prefer unseen places; top up from the full pool when running low.
+    const next = sampleItems(fresh, SHUFFLE_COUNT);
+    if (next.length < SHUFFLE_COUNT) {
+      const rest = shufflePool.plans.filter(
+        (plan) => !next.some((p) => p.destination.id === plan.destination.id),
       );
-      // Prefer unseen places; top up from the full pool when running low.
-      const next = sampleItems(fresh, SHUFFLE_COUNT);
-      if (next.length < SHUFFLE_COUNT) {
-        const rest = shufflePool.plans.filter(
-          (plan) => !next.some((p) => p.destination.id === plan.destination.id),
-        );
-        next.push(...sampleItems(rest, SHUFFLE_COUNT - next.length));
-      }
-      return next;
-    });
+      next.push(...sampleItems(rest, SHUFFLE_COUNT - next.length));
+    }
+    dealCards(next);
   }
 
   function chooseShuffleOption(plan: Plan) {
@@ -1179,10 +1291,12 @@ export function JourneyExperience() {
 
   const filtersActive = selectedCategories.length > 0;
   // After a miss, re-check the places we already fetched as settings change.
+  // Only trustworthy if the cached search covered the current reach.
   const liveMatches =
     journeyMode === "custom" &&
     prefecture &&
-    candidateCache?.key === `${prefecture.id}|${selectedCategories.join(",")}`
+    candidateCache?.key === `${prefecture.id}|${selectedCategories.join(",")}` &&
+    candidateCache.radiusKm >= (nearFilter?.radiusKm ?? Infinity)
       ? feasiblePlans(candidateCache.candidates).length
       : null;
 
@@ -1827,10 +1941,10 @@ export function JourneyExperience() {
                 <button
                   type="button"
                   onClick={() => choosePrefecture()}
-                  disabled={selecting || !direction}
+                  disabled={selecting || scouting || !direction}
                   className="scene-cta group justify-center"
                 >
-                  この方角へ進む
+                  {scouting ? "行ける場所を探しています…" : "この方角へ進む"}
                   <ArrowRight size={17} className="transition group-hover:translate-x-1" />
                 </button>
                 <button
@@ -1928,9 +2042,11 @@ export function JourneyExperience() {
                         <button
                           type="button"
                           onClick={() => choosePrefecture(prefecture.id)}
-                          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-vermilion px-4 py-2 text-xs font-bold text-white"
+                          disabled={scouting}
+                          className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-vermilion px-4 py-2 text-xs font-bold text-white disabled:opacity-60"
                         >
-                          <Route size={14} /> 行ける範囲の都道府県で探す
+                          <Route size={14} />
+                          {scouting ? "探しています…" : "行ける範囲の都道府県で探す"}
                         </button>
                       )}
                     </div>

@@ -83,6 +83,11 @@ function angularDifference(a: number, b: number): number {
   return diff > 180 ? 360 - diff : diff;
 }
 
+// How many degrees `to` lies off the compass direction, seen from `from`.
+export function bearingOffset(from: Coordinates, to: Coordinates, direction: Direction): number {
+  return angularDifference(bearingDegrees(from, to), directionAngle[direction]);
+}
+
 // Prefectures within this distance from the start point count as a
 // "nearby" (day-trip friendly) option.
 export const NEARBY_PREFECTURE_LIMIT_KM = 350;
