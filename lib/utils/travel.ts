@@ -152,7 +152,7 @@ export const transportInfo: Record<
 > = {
   walk: { labelJa: "徒歩", speedKmh: 4.5, yenPerKm: 0, perPerson: false, overheadMin: 0 },
   bicycle: { labelJa: "自転車", speedKmh: 15, yenPerKm: 0, perPerson: false, overheadMin: 0 },
-  motorbike: { labelJa: "バイク", speedKmh: 35, yenPerKm: 12, perPerson: false, overheadMin: 10 },
+  motorbike: { labelJa: "オートバイ", speedKmh: 35, yenPerKm: 12, perPerson: false, overheadMin: 10 },
   car: { labelJa: "車", speedKmh: 45, yenPerKm: 20, perPerson: false, overheadMin: 10 },
   train: { labelJa: "電車", speedKmh: 55, yenPerKm: 22, perPerson: true, overheadMin: 20 },
   shinkansen: { labelJa: "新幹線", speedKmh: 160, yenPerKm: 38, perPerson: true, overheadMin: 25 },

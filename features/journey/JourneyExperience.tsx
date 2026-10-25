@@ -41,6 +41,7 @@ import {
   Users,
   Utensils,
   WalletCards,
+  createLucideIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
@@ -357,13 +358,23 @@ const tripLengthOptions: {
 
 const nightsFor = (id: TripLengthId) => (id === "day" ? 0 : id === "one-night" ? 1 : 2);
 
+// Lucide has no motorcycle; sharing the bicycle icon made the two easy to
+// mix up, so draw one: two wheels, an engine block and a raised fork.
+const Motorbike = createLucideIcon("Motorbike", [
+  ["circle", { cx: "5", cy: "17", r: "3", key: "rear" }],
+  ["circle", { cx: "19", cy: "17", r: "3", key: "front" }],
+  ["path", { d: "M5 17l4-6h6.5", key: "seat" }],
+  ["path", { d: "M19 17l-3.5-10H18", key: "fork" }],
+  ["path", { d: "M9 11l2 6h3l2-6", key: "engine" }],
+]);
+
 const transportIcons: Record<
   TransportMode,
   typeof Footprints
 > = {
   walk: Footprints,
   bicycle: Bike,
-  motorbike: Bike,
+  motorbike: Motorbike,
   car: Car,
   train: TrainFront,
   shinkansen: TrainFront,
