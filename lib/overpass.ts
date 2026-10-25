@@ -45,8 +45,11 @@ async function attempt(
     cache: "no-store",
   });
   if (!response.ok) throw new Error(`overpass ${response.status}`);
-  const json = (await response.json()) as { elements?: OverpassElement[] };
+  const json = (await response.json()) as { elements?: OverpassElement[]; remark?: string };
   if (!Array.isArray(json.elements)) throw new Error("overpass: no elements");
+  // A mirror that timed out or lacks a feature (e.g. areas) still answers
+  // 200 with a remark and no elements — that's a failure, not "nothing here".
+  if (json.remark && /error/i.test(json.remark)) throw new Error(`overpass: ${json.remark}`);
   return json.elements;
 }
 

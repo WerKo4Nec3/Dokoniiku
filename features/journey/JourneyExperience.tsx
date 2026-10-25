@@ -920,12 +920,13 @@ export function JourneyExperience() {
     let plans: Plan[];
     if (journeyMode === "custom") {
       plans = feasiblePlans(candidates);
-      // Favour the compass direction when it still leaves a real choice.
-      if (sector !== null && direction) {
+      // Favour the compass direction when it still leaves a real choice —
+      // not within a genre, whose few places shouldn't be thinned further.
+      if (sector !== null && direction && !selectedCategories.length) {
         const ahead = plans.filter(
           (plan) => bearingOffset(start, plan.destination, direction) <= sector,
         );
-        if (ahead.length >= 3) plans = ahead;
+        if (ahead.length >= 5) plans = ahead;
       }
       if (!plans.length) {
         // Say why: how far this trip reaches vs. the closest place here.

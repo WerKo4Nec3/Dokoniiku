@@ -8,7 +8,7 @@ import type {
   Prefecture,
   SearchProviderResult,
 } from "@/types";
-import { randomItem } from "@/lib/utils/travel";
+import { displayPlaceName, preciseDistanceKm, randomItem } from "@/lib/utils/travel";
 
 const WIKI_ENDPOINT = "https://ja.wikipedia.org/w/api.php";
 
@@ -289,7 +289,10 @@ async function loadAttractions(
   key: string,
 ): Promise<SearchProviderResult<Destination[]>> {
   try {
-    const found = await searchCategoryPlaces(prefecture, categories, near);
+    let found = await searchCategoryPlaces(prefecture, categories, near);
+    if (categories.includes("hot-spring")) {
+      found = mergeOnsen(found, await loadOnsen(prefecture), prefecture, near);
+    }
     if (found.length || near) {
       // Within a reach, an empty answer is real: nothing of that kind there.
       resultCache.set(key, found);
@@ -315,6 +318,95 @@ async function loadAttractions(
       notice: "観光情報に接続できなかったため、デモ候補に切り替えました。",
     };
   }
+}
+
+type OnsenRecord = {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  wiki?: string;
+};
+
+const onsenFiles = new Map<string, Promise<OnsenRecord[]>>();
+
+// Onsen from OpenStreetMap (public/data/onsen, built by
+// scripts/build-onsen.mjs): Wikipedia has articles for only a fraction.
+function loadOnsen(prefecture: Prefecture): Promise<OnsenRecord[]> {
+  const cached = onsenFiles.get(prefecture.id);
+  if (cached) return cached;
+  const request = fetch(`/data/onsen/${prefecture.id}.json`)
+    .then((response) => {
+      if (!response.ok) throw new Error(`onsen ${response.status}`);
+      return response.json() as Promise<OnsenRecord[]>;
+    })
+    .catch(() => {
+      onsenFiles.delete(prefecture.id);
+      return [];
+    });
+  onsenFiles.set(prefecture.id, request);
+  return request;
+}
+
+const nameCore = (name: string) =>
+  displayPlaceName(name).replace(/[\s　・]/g, "").replace(/^天然/, "");
+
+// Adds OSM onsen to the Wikipedia ones. A bath inside an onsen town that
+// has its own article ("有馬温泉 金の湯" next to 有馬温泉) folds into it; an
+// article whose only namesake bath is far away has bad coordinates (天橋立温泉
+// sits in Kyoto city on Wikipedia) and moves to the bath.
+function mergeOnsen(
+  places: Destination[],
+  onsen: OnsenRecord[],
+  prefecture: Prefecture,
+  near?: NearFilter,
+): Destination[] {
+  const used = new Set<string>();
+  const merged = places.map((place) => {
+    if (!place.categories.includes("hot-spring")) return place;
+    const core = nameCore(place.name);
+    const namesakes = onsen.filter((item) => {
+      if (item.wiki === place.name) return true;
+      const other = nameCore(item.name);
+      const [short, long] = other.length < core.length ? [other, core] : [core, other];
+      // "天橋立温泉" ⊂ "天橋立温泉智恵の湯", but not "山の湯" ⊂ "山の湯温泉".
+      return short === long || (short.includes("温泉") && long.startsWith(short));
+    });
+    if (!namesakes.length) return place;
+    const close = namesakes.filter((item) => preciseDistanceKm(place, item) <= 10);
+    for (const item of close) used.add(item.id);
+    if (close.length) return place;
+    // Only when the namesakes agree on one spot (not two same-named towns).
+    const moved = namesakes[0];
+    if (namesakes.some((item) => preciseDistanceKm(item, moved) > 3)) return place;
+    for (const item of namesakes) used.add(item.id);
+    return { ...place, latitude: moved.latitude, longitude: moved.longitude };
+  });
+
+  const kept: Destination[] = [];
+  for (const item of onsen) {
+    if (used.has(item.id)) continue;
+    if (near && preciseDistanceKm(near, item) > near.radiusKm) continue;
+    const core = nameCore(item.name);
+    // The same bath mapped twice (a point and an outline).
+    if (kept.some((other) => nameCore(other.name) === core && preciseDistanceKm(other, item) < 0.5)) {
+      continue;
+    }
+    kept.push({
+      id: item.id,
+      name: item.name,
+      prefectureId: prefecture.id,
+      latitude: item.latitude,
+      longitude: item.longitude,
+      categories: ["hot-spring"],
+      description: `${prefecture.nameJa}の温泉。営業時間や料金は、出かける前にチェックしてね。`,
+      ...(item.wiki ? { wikiTitle: item.wiki } : {}),
+    });
+  }
+  return [
+    ...merged.filter((place) => !near || preciseDistanceKm(near, place) <= near.radiusKm),
+    ...kept,
+  ];
 }
 
 // Everything within `near` across several prefectures, a few searches at a
