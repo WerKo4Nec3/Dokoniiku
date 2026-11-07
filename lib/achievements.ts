@@ -166,7 +166,7 @@ export const ACHIEVEMENTS: AchievementDef[] = [
   { id: "level", name: "旅の達人", emoji: "⭐", category: "record", desc: "Lv.{n}に到達する", tiers: [5, 10, 17], value: (c) => c.level },
   // なかま
   { id: "friends", name: "なかまができた", emoji: "🤝", category: "social", desc: "なかまを{n}人つくる", unit: "人", tiers: [1, 5, 15], value: (c) => c.friends },
-  { id: "groups", name: "グループの一員", emoji: "👥", category: "social", desc: "{n}つのグループに入る", tiers: [1, 3], value: (c) => c.groups },
+  { id: "groups", name: "旅の輪", emoji: "👥", category: "social", desc: "イベントやグループに{n}回参加する", tiers: [1, 3], value: (c) => c.groups },
 ];
 
 export function buildContext(

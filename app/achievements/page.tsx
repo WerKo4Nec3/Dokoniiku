@@ -6,6 +6,7 @@ import { CabinetHeader } from "@/components/CabinetHeader";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { Medal } from "@/components/achievements/Medal";
 import { listMyGroups } from "@/lib/api/groups";
+import { listJoinedMeetups } from "@/lib/api/meetups";
 import { listFriendProfiles } from "@/lib/api/social";
 import {
   CATEGORY_LABELS,
@@ -40,7 +41,13 @@ export default function AchievementsPage() {
     let active = true;
     Promise.all([
       listFriendProfiles(user.uid).then((list) => list.length).catch(() => null),
-      listMyGroups(user.uid).then((list) => list.length).catch(() => null),
+      // Events joined count too (groups were replaced by イベント).
+      Promise.all([
+        listMyGroups(user.uid).then((list) => list.length),
+        listJoinedMeetups(user.uid).then((list) => list.length),
+      ])
+        .then(([groups, meetups]) => groups + meetups)
+        .catch(() => null),
     ]).then(([friends, groups]) => {
       if (!active) return;
       setExtras({ friends, groups });

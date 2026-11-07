@@ -4,6 +4,7 @@ import {
   CircleUserRound,
   Compass,
   MapPinCheck,
+  PartyPopper,
   Radar,
   ScrollText,
   Settings,
@@ -28,6 +29,8 @@ export type TabiApp = {
   /** Shown in the bottom dock on phones. */
   dock?: boolean;
   adminOnly?: boolean;
+  /** Still opens in the frame, but not listed on the home screen or dock. */
+  hidden?: boolean;
   /** Not wrapped in the OS frame (opens full-screen). */
   external?: boolean;
 };
@@ -41,7 +44,9 @@ export const TABI_APPS: TabiApp[] = [
   { id: "achievements", href: "/achievements", name: "実績", icon: Trophy, from: "#f7d36b", to: "#c98a12" },
   { id: "live", href: "/live", name: "いまどこ", icon: Radar, from: "#64c9c9", to: "#2b7da6" },
   { id: "friends", href: "/friends", name: "なかま", icon: Users, from: "#93d37c", to: "#3e8c48" },
-  { id: "groups", href: "/groups", name: "グループ", icon: UsersRound, from: "#a497f4", to: "#5a48c6" },
+  { id: "meetups", href: "/meetups", name: "イベント", icon: PartyPopper, from: "#a497f4", to: "#5a48c6", dock: true },
+  // Replaced by イベント; kept reachable for groups people already have.
+  { id: "groups", href: "/groups", name: "グループ", icon: UsersRound, from: "#9aa0b8", to: "#5d6378", hidden: true },
   { id: "profile", href: "/profile", name: "タビ手帳", icon: CircleUserRound, from: "#f59bc2", to: "#c4466f", dock: true },
   { id: "wardrobe", href: "/wardrobe", name: "きせかえ", icon: Shirt, from: "#ffb39e", to: "#e3655f" },
   { id: "settings", href: "/settings", name: "設定", icon: Settings, from: "#a3acb6", to: "#5b6570" },

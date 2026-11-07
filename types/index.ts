@@ -274,6 +274,39 @@ export type GroupPoll = {
   votes: Record<string, string>;
 };
 
+// ---- Meetups (イベント): a trip someone hosts and others ask to join ----
+
+// Display info kept on the meetup for everyone it mentions, so lists don't
+// need a profile read per person.
+export type MeetupPerson = { name: string; emoji?: string; color?: string };
+
+export type Meetup = {
+  id: string;
+  title: string;
+  about?: string;
+  emoji?: string;
+  category: GroupCategory;
+  cover: GroupCover;
+  date: string; // "YYYY-MM-DD"
+  time?: string; // "HH:MM"
+  placeName?: string;
+  placeLat?: number;
+  placeLon?: number;
+  // Most people who can go, the host included; 0 = no limit.
+  capacity: number;
+  // public: listed for everyone; private: only the invited can see it.
+  visibility: "public" | "private";
+  // approval: the host accepts each request; open: anyone just joins.
+  joinPolicy: "approval" | "open";
+  // Run by Dokoniiku (admins) and pinned for everyone.
+  official?: boolean;
+  hostUid: string;
+  members: string[];
+  pending: string[];
+  invites: string[];
+  people: Record<string, MeetupPerson>;
+};
+
 // A planned joint trip: one saved card, one date, whoever joins.
 export type GroupEvent = {
   id: string;

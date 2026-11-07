@@ -98,7 +98,7 @@ export default function TabiHome() {
       )[0]
     );
   }, [now]);
-  const apps = TABI_APPS.filter((app) => !app.adminOnly || isAdmin);
+  const apps = TABI_APPS.filter((app) => !app.hidden && (!app.adminOnly || isAdmin));
 
   return (
     // z-0 makes this a stacking context, so the wallpaper below paints above

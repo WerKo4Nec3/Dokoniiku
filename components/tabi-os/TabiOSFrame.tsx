@@ -42,7 +42,7 @@ export function TabiOSFrame() {
   }, [pathname]);
 
   if (!on) return null;
-  const dockApps = TABI_APPS.filter((item) => !item.adminOnly);
+  const dockApps = TABI_APPS.filter((item) => !item.adminOnly && !item.hidden);
 
   return (
     <>

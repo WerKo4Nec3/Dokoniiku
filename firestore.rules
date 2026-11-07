@@ -133,6 +133,123 @@ service cloud.firestore {
       }
     }
 
+    // ---- Meetups (イベント): a trip one traveller hosts. Public ones are
+    // listed for everyone; private ones only for members, the invited and
+    // those waiting for approval. Each kind of change is spelled out below.
+    match /meetups/{meetupId} {
+      function was() { return resource.data; }
+      function will() { return request.resource.data; }
+      function changed() { return will().diff(was()).affectedKeys(); }
+      // Self-service changes may only touch the caller's own `people` entry.
+      function ownPersonOnly() {
+        return !('people' in changed())
+          || will().people.diff(was().people).affectedKeys().hasOnly([request.auth.uid]);
+      }
+      function withinCapacity() {
+        return will().capacity == 0 || will().members.size() <= will().capacity;
+      }
+
+      allow read: if signedIn() && (
+        was().visibility == "public"
+        || request.auth.uid in was().members
+        || request.auth.uid in was().invites
+        || request.auth.uid in was().pending
+        || isAdmin()
+      );
+      allow create: if signedIn()
+        && will().hostUid == request.auth.uid
+        && will().members == [request.auth.uid]
+        && will().pending == []
+        && will().invites is list && will().invites.size() <= 50
+        && !(request.auth.uid in will().invites)
+        && will().people is map
+        && will().visibility in ["public", "private"]
+        && will().joinPolicy in ["approval", "open"]
+        && (will().get('official', false) == false || isAdmin())
+        && will().title is string && will().title.size() > 0 && will().title.size() <= 60
+        && isDay(will().date)
+        && will().capacity is int && will().capacity >= 0 && will().capacity <= 100;
+      allow update: if signedIn() && (
+        // The host runs the event (accept/decline/remove, edit details);
+        // only admins may flip the official flag.
+        (
+          was().hostUid == request.auth.uid
+          && will().hostUid == was().hostUid
+          && (will().get('official', false) == was().get('official', false) || isAdmin())
+          && withinCapacity()
+        )
+        // Ask to join a public event that needs approval.
+        || (
+          was().visibility == "public" && was().joinPolicy == "approval"
+          && !(request.auth.uid in was().members) && !(request.auth.uid in was().pending)
+          && changed().hasOnly(["pending", "people"])
+          && will().pending == was().pending.concat([request.auth.uid])
+          && ownPersonOnly()
+        )
+        // Withdraw one's own request.
+        || (
+          request.auth.uid in was().pending
+          && changed().hasOnly(["pending"])
+          && will().pending == was().pending.removeAll([request.auth.uid])
+        )
+        // Join an open public event straight away.
+        || (
+          was().visibility == "public" && was().joinPolicy == "open"
+          && !(request.auth.uid in was().members)
+          && changed().hasOnly(["members", "people"])
+          && will().members == was().members.concat([request.auth.uid])
+          && ownPersonOnly() && withinCapacity()
+        )
+        // Accept an invitation.
+        || (
+          request.auth.uid in was().invites && !(request.auth.uid in was().members)
+          && changed().hasOnly(["members", "invites", "pending", "people"])
+          && will().members == was().members.concat([request.auth.uid])
+          && will().invites == was().invites.removeAll([request.auth.uid])
+          && will().pending == was().pending.removeAll([request.auth.uid])
+          && ownPersonOnly() && withinCapacity()
+        )
+        // Decline an invitation.
+        || (
+          request.auth.uid in was().invites
+          && changed().hasOnly(["invites"])
+          && will().invites == was().invites.removeAll([request.auth.uid])
+        )
+        // A member invites friends (and adds only their display info).
+        || (
+          request.auth.uid in was().members
+          && changed().hasOnly(["invites", "people"])
+          && will().invites.hasAll(was().invites) && will().invites.size() <= 50
+          && (!('people' in changed())
+            || will().people.diff(was().people).affectedKeys()
+              .hasOnly(will().invites.removeAll(was().invites)))
+        )
+        // A guest leaves.
+        || (
+          request.auth.uid in was().members && request.auth.uid != was().hostUid
+          && changed().hasOnly(["members"])
+          && will().members == was().members.removeAll([request.auth.uid])
+        )
+      );
+      allow delete: if signedIn() && (was().hostUid == request.auth.uid || isAdmin());
+
+      // Chat for the people going.
+      match /messages/{messageId} {
+        function meetup() {
+          return get(/databases/$(database)/documents/meetups/$(meetupId)).data;
+        }
+        allow read: if signedIn() && request.auth.uid in meetup().members;
+        allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.auth.uid in meetup().members
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000;
+        allow delete: if signedIn()
+          && (resource.data.uid == request.auth.uid || meetup().hostUid == request.auth.uid);
+      }
+    }
+
     // ---- Place ratings (👍/👎). Counters are public (the randomizer drops
     // heavily-disliked places for everyone), votes are private per user. The
     // counters may only move in exact lock-step with the caller's own vote doc
