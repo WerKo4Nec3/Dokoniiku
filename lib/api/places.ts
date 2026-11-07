@@ -8,7 +8,12 @@ import type {
   Prefecture,
   SearchProviderResult,
 } from "@/types";
-import { displayPlaceName, preciseDistanceKm, randomItem } from "@/lib/utils/travel";
+import {
+  categoryLabels,
+  displayPlaceName,
+  preciseDistanceKm,
+  randomItem,
+} from "@/lib/utils/travel";
 
 const WIKI_ENDPOINT = "https://ja.wikipedia.org/w/api.php";
 
@@ -139,6 +144,8 @@ type WikiQueryResponse = {
       categories?: Array<{ title: string }>;
       thumbnail?: { source: string };
     }>;
+    normalized?: Array<{ from: string; to: string }>;
+    redirects?: Array<{ from: string; to: string }>;
   };
 };
 
@@ -357,7 +364,10 @@ async function loadAttractions(
   try {
     let found = await searchCategoryPlaces(prefecture, categories, near);
     if (categories.includes("hot-spring")) {
-      found = mergeOnsen(found, await loadOnsen(prefecture), prefecture, near);
+      found = mergeOnsen(found, await loadOsm("onsen", prefecture), prefecture, near);
+    }
+    if (categories.some((genre) => genre !== "hot-spring")) {
+      found = mergeSights(found, await loadOsm("sights", prefecture), categories, prefecture, near);
     }
     if (found.length || near) {
       // Within a reach, an empty answer is real: nothing of that kind there.
@@ -386,32 +396,62 @@ async function loadAttractions(
   }
 }
 
-type OnsenRecord = {
+type OsmRecord = {
   id: string;
   name: string;
   latitude: number;
   longitude: number;
   wiki?: string;
+  // sights only: the app genres the place belongs to.
+  genres?: DestinationCategory[];
 };
 
-const onsenFiles = new Map<string, Promise<OnsenRecord[]>>();
+const osmFiles = new Map<string, Promise<OsmRecord[]>>();
 
-// Onsen from OpenStreetMap (public/data/onsen, built by
-// scripts/build-onsen.mjs): Wikipedia has articles for only a fraction.
-function loadOnsen(prefecture: Prefecture): Promise<OnsenRecord[]> {
-  const cached = onsenFiles.get(prefecture.id);
+// Places from OpenStreetMap (public/data/<layer>, built by
+// scripts/build-osm.mjs) where Wikipedia has articles for only a fraction:
+// onsen, and sights such as viewpoints, waterfalls, museums and 道の駅.
+function loadOsm(layer: "onsen" | "sights", prefecture: Prefecture): Promise<OsmRecord[]> {
+  const key = `${layer}/${prefecture.id}`;
+  const cached = osmFiles.get(key);
   if (cached) return cached;
-  const request = fetch(`/data/onsen/${prefecture.id}.json`)
+  const request = fetch(`/data/${key}.json`)
     .then((response) => {
-      if (!response.ok) throw new Error(`onsen ${response.status}`);
-      return response.json() as Promise<OnsenRecord[]>;
+      if (!response.ok) throw new Error(`${key} ${response.status}`);
+      return response.json() as Promise<OsmRecord[]>;
     })
     .catch(() => {
-      onsenFiles.delete(prefecture.id);
+      osmFiles.delete(key);
       return [];
     });
-  onsenFiles.set(prefecture.id, request);
+  osmFiles.set(key, request);
   return request;
+}
+
+const osmNotes: Partial<Record<DestinationCategory, string>> = {
+  "hot-spring": "営業時間や料金は、出かける前にチェックしてね。",
+  museum: "開館日や料金は、出かける前にチェックしてね。",
+  food: "営業時間は、出かける前にチェックしてね。",
+};
+
+function osmDestination(
+  item: OsmRecord,
+  genres: DestinationCategory[],
+  prefecture: Prefecture,
+): Destination {
+  const main = genres[0];
+  return {
+    id: item.id,
+    name: item.name,
+    prefectureId: prefecture.id,
+    latitude: item.latitude,
+    longitude: item.longitude,
+    categories: genres,
+    description: `${prefecture.nameJa}の${categoryLabels[main]}スポット。${
+      osmNotes[main] ?? "地図で場所を確かめてから出かけよう。"
+    }`,
+    ...(item.wiki ? { wikiTitle: item.wiki } : {}),
+  };
 }
 
 const nameCore = (name: string) =>
@@ -423,7 +463,7 @@ const nameCore = (name: string) =>
 // sits in Kyoto city on Wikipedia) and moves to the bath.
 function mergeOnsen(
   places: Destination[],
-  onsen: OnsenRecord[],
+  onsen: OsmRecord[],
   prefecture: Prefecture,
   near?: NearFilter,
 ): Destination[] {
@@ -458,21 +498,43 @@ function mergeOnsen(
     if (kept.some((other) => nameCore(other.name) === core && preciseDistanceKm(other, item) < 0.5)) {
       continue;
     }
-    kept.push({
-      id: item.id,
-      name: item.name,
-      prefectureId: prefecture.id,
-      latitude: item.latitude,
-      longitude: item.longitude,
-      categories: ["hot-spring"],
-      description: `${prefecture.nameJa}の温泉。営業時間や料金は、出かける前にチェックしてね。`,
-      ...(item.wiki ? { wikiTitle: item.wiki } : {}),
-    });
+    kept.push(osmDestination(item, ["hot-spring"], prefecture));
   }
   return [
     ...merged.filter((place) => !near || preciseDistanceKm(near, place) <= near.radiusKm),
     ...kept,
   ];
+}
+
+// Adds OSM sights of the wanted genres, skipping the ones Wikipedia already
+// has (the same article, or the same name close by).
+function mergeSights(
+  places: Destination[],
+  sights: OsmRecord[],
+  genres: DestinationCategory[],
+  prefecture: Prefecture,
+  near?: NearFilter,
+): Destination[] {
+  const known = places.map((place) => ({ place, core: nameCore(place.name) }));
+  const kept: Destination[] = [];
+  for (const item of sights) {
+    const itemGenres = allGenres.filter((genre) => item.genres?.includes(genre));
+    if (!itemGenres.some((genre) => genres.includes(genre))) continue;
+    if (near && preciseDistanceKm(near, item) > near.radiusKm) continue;
+    const core = nameCore(item.name);
+    // A bare "展望台" says nothing about where you'd be going.
+    if (core.length < 3 || /^(展望台|展望所|展望広場|見晴台|見晴らし台|休憩所)$/.test(core)) continue;
+    const duplicate =
+      known.some(
+        ({ place, core: other }) =>
+          place.name === item.wiki ||
+          ((other === core || other.includes(core) || core.includes(other)) &&
+            preciseDistanceKm(place, item) < 2),
+      ) ||
+      kept.some((other) => nameCore(other.name) === core && preciseDistanceKm(other, item) < 0.5);
+    if (!duplicate) kept.push(osmDestination(item, itemGenres, prefecture));
+  }
+  return [...places, ...kept];
 }
 
 // Everything within `near` across several prefectures, a few searches at a
@@ -497,22 +559,64 @@ export async function getAttractionsNear(
 export async function getPlaceThumbnails(
   places: Destination[],
 ): Promise<Map<string, string>> {
+  const thumbnails = new Map<string, string>();
   const ids = places
     .map((place) => place.id.match(/^wiki-(\d+)$/)?.[1])
     .filter((id): id is string => Boolean(id))
     .slice(0, 50);
-  const thumbnails = new Map<string, string>();
-  if (!ids.length) return thumbnails;
-  const result = await wikiQuery({
-    pageids: ids.join("|"),
-    prop: "pageimages",
-    piprop: "thumbnail",
-    pithumbsize: "600",
-    pilimit: "50",
-  }).catch(() => null);
-  for (const page of result?.query?.pages ?? []) {
-    const url = usableThumbnail(page.thumbnail?.source);
-    if (url) thumbnails.set(`wiki-${page.pageid}`, url);
+  // OpenStreetMap places linked to an article: looked up by title.
+  const byTitle = new Map<string, string[]>();
+  for (const place of places) {
+    if (place.id.startsWith("wiki-") || !place.wikiTitle) continue;
+    byTitle.set(place.wikiTitle, [...(byTitle.get(place.wikiTitle) ?? []), place.id]);
   }
+  const lookups: Promise<void>[] = [];
+  if (ids.length) {
+    lookups.push(
+      wikiQuery({
+        pageids: ids.join("|"),
+        prop: "pageimages",
+        piprop: "thumbnail",
+        pithumbsize: "600",
+        pilimit: "50",
+      })
+        .then((result) => {
+          for (const page of result.query?.pages ?? []) {
+            const url = usableThumbnail(page.thumbnail?.source);
+            if (url) thumbnails.set(`wiki-${page.pageid}`, url);
+          }
+        })
+        .catch(() => {}),
+    );
+  }
+  if (byTitle.size) {
+    lookups.push(
+      wikiQuery({
+        titles: [...byTitle.keys()].slice(0, 50).join("|"),
+        redirects: "1",
+        prop: "pageimages",
+        piprop: "thumbnail",
+        pithumbsize: "600",
+        pilimit: "50",
+      })
+        .then((result) => {
+          // Follow "A_b" → "A b" → redirect target back to the asked title.
+          const asked = new Map<string, string>();
+          for (const title of byTitle.keys()) asked.set(title, title);
+          for (const step of [...(result.query?.normalized ?? []), ...(result.query?.redirects ?? [])]) {
+            const origin = asked.get(step.from);
+            if (origin) asked.set(step.to, origin);
+          }
+          for (const page of result.query?.pages ?? []) {
+            const url = usableThumbnail(page.thumbnail?.source);
+            const origin = asked.get(page.title);
+            if (!url || !origin) continue;
+            for (const id of byTitle.get(origin) ?? []) thumbnails.set(id, url);
+          }
+        })
+        .catch(() => {}),
+    );
+  }
+  await Promise.all(lookups);
   return thumbnails;
 }
