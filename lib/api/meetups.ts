@@ -79,8 +79,12 @@ export async function updateMeetup(id: string, patch: Partial<MeetupDraft>) {
   await updateDoc(doc(db, "meetups", id), data);
 }
 
+// The chat goes first: messages left under a deleted event would linger
+// unreadable (the rules check the parent's member list).
 export async function deleteMeetup(id: string) {
   if (!db) return;
+  const messages = await getDocs(collection(db, "meetups", id, "messages")).catch(() => null);
+  await Promise.all((messages?.docs ?? []).map((entry) => deleteDoc(entry.ref).catch(() => {})));
   await deleteDoc(doc(db, "meetups", id));
 }
 

@@ -5,18 +5,11 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { ensurePublicProfile, getPublicProfile, listFriendProfiles } from "@/lib/api/social";
-import { buildContext, evaluateAchievements } from "@/lib/achievements";
 import { statusOf } from "@/lib/utils/travel";
-import { computeStats, computeXp, levelForXp } from "@/lib/utils/gamification";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
-import { FriendLeaderboard } from "@/components/FriendLeaderboard";
-import { PassportStamps } from "@/components/PassportStamps";
-import { JapanGeoMap } from "@/components/JapanGeoMap";
-import { YearRecap } from "@/components/YearRecap";
-import { AVATAR_COLORS, ProfileEditor } from "@/components/profile/ProfileEditor";
-import { ProfileHero } from "@/components/profile/ProfileHero";
-import { ProfileOverview } from "@/components/profile/ProfileOverview";
+import { ProfileBody } from "@/components/profile/ProfileBody";
+import { ProfileEditor } from "@/components/profile/ProfileEditor";
 import type { PublicProfile, TabibitoProfile } from "@/types";
 
 function joinedLabel(creationTime?: string): string | undefined {
@@ -68,12 +61,6 @@ export default function ProfilePage() {
 
   const list = useMemo(() => journeys ?? [], [journeys]);
   const visitedCount = useMemo(() => list.filter((journey) => statusOf(journey) === "done").length, [list]);
-  const level = useMemo(() => levelForXp(computeXp(list)), [list]);
-  const prefectures = useMemo(() => computeStats(list).prefectures, [list]);
-  const medals = useMemo(
-    () => evaluateAchievements(buildContext(list)).reduce((sum, a) => sum + a.tier + 1, 0),
-    [list],
-  );
 
   const hasGoogle = user?.providerData.some((item) => item.providerId === "google.com") ?? false;
   const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "旅人";
@@ -87,7 +74,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-20 pt-32 sm:px-6">
+    <section className="mx-auto min-h-[calc(100vh-4rem)] max-w-3xl px-4 pb-24 pt-32 sm:px-6 lg:max-w-6xl">
       <CabinetHeader title="タビ手帳" subtitle="あなたの旅人ステータスと、日本の制覇マップ。" />
 
       {!enabled && (
@@ -112,41 +99,20 @@ export default function ProfilePage() {
       )}
 
       {enabled && user && (
-        <div className="space-y-8 sm:mt-6">
-          <ProfileHero
-            name={displayName}
-            bio={profile?.bio}
-            avatarEmoji={profile?.avatarEmoji}
-            avatarColor={profile?.avatarColor ?? AVATAR_COLORS[0]}
+        <div className="sm:mt-6">
+          <ProfileBody
+            uid={user.uid}
+            displayName={displayName}
+            profile={profile}
             photoURL={user.photoURL}
-            levelLabel={`Lv.${level.level} ${level.title}`}
-            friendCode={friendCode}
             joinedLabel={joinedLabel(user.metadata.creationTime)}
-            stats={[
-              { value: `${prefectures}`, label: "都道府県" },
-              { value: `${friends.length}`, label: "なかま", href: "/friends" },
-              { value: `${medals}`, label: "メダル", href: "/achievements" },
-            ]}
-            onEdit={() => setEditing(true)}
-          />
-
-          <ProfileOverview journeys={list} now={now} />
-
-          <YearRecap journeys={list} />
-
-          <FriendLeaderboard
-            me={{
-              uid: user.uid,
-              name: displayName,
-              visitedCount,
-              avatarEmoji: profile?.avatarEmoji,
-            }}
+            friendCode={friendCode}
             friends={friends}
+            journeys={list}
+            now={now}
+            onEdit={() => setEditing(true)}
+            onOpenJourney={openJourney}
           />
-
-          <JapanGeoMap journeys={list} onOpenJourney={openJourney} />
-
-          <PassportStamps journeys={list} />
         </div>
       )}
 

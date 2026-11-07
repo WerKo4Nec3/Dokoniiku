@@ -42,6 +42,7 @@ export default function MeetupsPage() {
   const [category, setCategory] = useState<GroupCategory | "all">("all");
   const [term, setTerm] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setToday(todayJst()), 0);
@@ -54,7 +55,14 @@ export default function MeetupsPage() {
     const guard = <T,>(set: (value: T) => void) => (value: T) => {
       if (active) set(value);
     };
-    browsePublicMeetups().then(guard(setPublicList)).catch(() => active && setPublicList([]));
+    browsePublicMeetups()
+      .then(guard(setPublicList))
+      .catch((error) => {
+        console.warn("meetups: public list failed", error);
+        if (!active) return;
+        setLoadFailed(true);
+        setPublicList([]);
+      });
     listJoinedMeetups(user.uid).then(guard(setJoined)).catch(() => {});
     listRequestedMeetups(user.uid).then(guard(setRequested)).catch(() => {});
     listInvitedMeetups(user.uid).then(guard(setInvited)).catch(() => {});
@@ -222,6 +230,10 @@ export default function MeetupsPage() {
               </div>
               {publicList === null ? (
                 <p className="py-8 text-center text-xs font-bold text-[color:var(--muted)]">読み込み中…</p>
+              ) : loadFailed ? (
+                <p className="rounded-[22px] border border-dashed border-[color:var(--line)] p-8 text-center text-xs font-bold text-[color:var(--muted)]">
+                  イベントを読み込めませんでした。少し待ってから開き直してね。
+                </p>
               ) : directory.length === 0 ? (
                 <div className="rounded-[22px] border border-dashed border-[color:var(--line)] p-8 text-center">
                   <p className="text-3xl">🗺️</p>
