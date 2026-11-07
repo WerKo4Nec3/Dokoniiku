@@ -115,7 +115,7 @@ export default function LivePage() {
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-2">
-        <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+        <div className="card-3d rounded-[24px] bg-[color:var(--surface)] p-5">
           <h2 className="flex items-center gap-2 text-sm font-black">
             <LocateFixed size={16} className="text-vermilion" /> あなたの現在地
           </h2>
@@ -212,7 +212,7 @@ export default function LivePage() {
           )}
         </div>
 
-        <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+        <div className="card-3d rounded-[24px] bg-[color:var(--surface)] p-5">
           <h2 className="flex items-center gap-2 text-sm font-black">
             <Users size={16} className="text-vermilion" /> シェアしてくれている仲間
           </h2>

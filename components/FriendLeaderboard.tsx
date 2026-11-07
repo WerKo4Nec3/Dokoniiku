@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Users } from "lucide-react";
 import type { PublicProfile } from "@/types";
 
@@ -46,37 +47,39 @@ export function FriendLeaderboard({
       ) : (
         <ol className="mt-4 space-y-2">
           {entries.map((entry, index) => (
-            <li
-              key={entry.uid}
-              className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${
-                entry.isMe
-                  ? "border-vermilion/40 bg-vermilion/5"
-                  : "border-[color:var(--line)]"
-              }`}
-            >
-              <span className="grid w-7 shrink-0 place-items-center text-sm font-black tabular-nums text-[color:var(--muted)]">
-                {MEDALS[index] ?? index + 1}
-              </span>
-              <span
-                aria-hidden
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--surface-muted)] text-base"
+            <li key={entry.uid}>
+              <Link
+                href={entry.isMe ? "/profile" : `/u/${entry.uid}`}
+                className={`flex items-center gap-3 rounded-xl border-2 px-3 py-2.5 transition hover:border-vermilion/50 ${
+                  entry.isMe
+                    ? "border-vermilion/40 bg-vermilion/5"
+                    : "border-[color:var(--line)]"
+                }`}
               >
-                {entry.avatarEmoji ?? "🐣"}
-              </span>
-              <span className="min-w-0 flex-1 truncate text-sm font-bold">
-                {entry.name}
-                {entry.isMe && (
-                  <span className="ml-1.5 text-[10px] font-black text-vermilion">
-                    あなた
-                  </span>
-                )}
-              </span>
-              <span className="shrink-0 text-sm font-black tabular-nums">
-                {entry.visitedCount}
-                <span className="ml-0.5 text-[11px] font-bold text-[color:var(--muted)]">
-                  件
+                <span className="grid w-7 shrink-0 place-items-center text-sm font-black tabular-nums text-[color:var(--muted)]">
+                  {MEDALS[index] ?? index + 1}
                 </span>
-              </span>
+                <span
+                  aria-hidden
+                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[color:var(--surface-muted)] text-base"
+                >
+                  {entry.avatarEmoji ?? "🐣"}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-sm font-bold">
+                  {entry.name}
+                  {entry.isMe && (
+                    <span className="ml-1.5 text-[10px] font-black text-vermilion">
+                      あなた
+                    </span>
+                  )}
+                </span>
+                <span className="shrink-0 text-sm font-black tabular-nums">
+                  {entry.visitedCount}
+                  <span className="ml-0.5 text-[11px] font-bold text-[color:var(--muted)]">
+                    件
+                  </span>
+                </span>
+              </Link>
             </li>
           ))}
         </ol>

@@ -14,6 +14,7 @@ import {
   preciseDistanceKm,
   randomItem,
 } from "@/lib/utils/travel";
+import { keepInPrefecture } from "@/lib/prefectureArea";
 
 const WIKI_ENDPOINT = "https://ja.wikipedia.org/w/api.php";
 
@@ -90,7 +91,7 @@ function cacheKey(
   return `${prefecture.id}|${[...categories].sort().join(",")}${area}`;
 }
 
-function isLikelyAttraction(title: string): boolean {
+export function isLikelyAttraction(title: string): boolean {
   return attractionPattern.test(title) && !nonAttractionPattern.test(title);
 }
 
@@ -362,7 +363,11 @@ async function loadAttractions(
   key: string,
 ): Promise<SearchProviderResult<Destination[]>> {
   try {
-    let found = await searchCategoryPlaces(prefecture, categories, near);
+    // Category trees cross prefecture borders: keep what is really there.
+    let found = await keepInPrefecture(
+      await searchCategoryPlaces(prefecture, categories, near),
+      prefecture.id,
+    );
     if (categories.includes("hot-spring")) {
       found = mergeOnsen(found, await loadOsm("onsen", prefecture), prefecture, near);
     }
@@ -376,7 +381,9 @@ async function loadAttractions(
     }
     // Nothing in the structured categories: try the geosearch around the
     // prefecture centre, keeping only the requested genres if any.
-    const nearby = (await geosearchAttractions(prefecture)).filter(
+    const nearby = (
+      await keepInPrefecture(await geosearchAttractions(prefecture), prefecture.id)
+    ).filter(
       (place) =>
         !categories.length ||
         place.categories.some((category) => categories.includes(category)),

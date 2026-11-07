@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { saveJourneyForUser } from "@/lib/api/savedJourneys";
-import { statusOf } from "@/lib/utils/travel";
+import { publicStatsFor } from "@/lib/publicStats";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { FriendsPanel } from "@/components/FriendsPanel";
@@ -40,11 +40,7 @@ export default function FriendsPage() {
     };
   }, [user]);
 
-  const visitedCount = useMemo(
-    () =>
-      (journeys ?? []).filter((journey) => statusOf(journey) === "done").length,
-    [journeys],
-  );
+  const stats = useMemo(() => (journeys ? publicStatsFor(journeys) : null), [journeys]);
 
   async function saveSharedJourney(journey: JourneyResult) {
     if (!user) return;
@@ -82,7 +78,7 @@ export default function FriendsPage() {
           <button
             type="button"
             onClick={() => openAuthDialog()}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+            className="btn-3d btn-3d-forest mt-4"
           >
             ログイン / 新規登録
           </button>
@@ -95,7 +91,7 @@ export default function FriendsPage() {
             uid={user.uid}
             profile={profile}
             fallbackName={user.displayName ?? user.email ?? "旅人"}
-            visitedCount={visitedCount}
+            stats={stats}
             autoAddCode={autoAddCode}
             onOpenJourney={openJourney}
             onSaveShared={saveSharedJourney}

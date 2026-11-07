@@ -62,7 +62,7 @@ function timeOf(message: GroupMessage): string {
   }
 }
 
-const card = "rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-4 sm:p-5";
+const card = "card-3d rounded-[24px] bg-[color:var(--surface)] p-4 sm:p-5";
 
 export default function MeetupPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -431,8 +431,13 @@ export default function MeetupPage({ params }: { params: Promise<{ id: string }>
             <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3">
               {meetup.members.map((uid) => (
                 <div key={uid} className="flex items-center gap-2 rounded-xl bg-[color:var(--surface-muted)] px-2.5 py-2">
-                  <PersonAvatar person={meetup.people[uid]} size={28} />
-                  <span className="min-w-0 flex-1 truncate text-xs font-bold">{meetup.people[uid]?.name ?? "旅人"}</span>
+                  <Link
+                    href={uid === user.uid ? "/profile" : `/u/${uid}`}
+                    className="flex min-w-0 flex-1 items-center gap-2 hover:underline"
+                  >
+                    <PersonAvatar person={meetup.people[uid]} size={28} />
+                    <span className="min-w-0 flex-1 truncate text-xs font-bold">{meetup.people[uid]?.name ?? "旅人"}</span>
+                  </Link>
                   {uid === meetup.hostUid ? (
                     <Crown size={13} className="shrink-0 text-sun" />
                   ) : (

@@ -39,7 +39,7 @@ export function SightsCard({
 
   if (sights && sights.length === 0) return null;
   return (
-    <section className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}>
+    <section className={`card-3d rounded-[24px] bg-[color:var(--surface)] p-5 ${className}`}>
       <h3 className="flex items-center gap-2 text-sm font-black">
         <Sparkles size={16} className="text-vermilion" /> ここで楽しむ
       </h3>

@@ -4,6 +4,7 @@ import { arrayUnion, doc, serverTimestamp, setDoc, updateDoc } from "firebase/fi
 import { prefectures } from "@/data/prefectures";
 import type { EventSpot, TravelEvent } from "@/data/events";
 import { db } from "@/lib/firebase";
+import { isLikelyAttraction } from "@/lib/api/places";
 import { getDestinationSummary } from "@/lib/api/wikipedia";
 import { getWeatherByCoordinates } from "@/lib/api/weather";
 import { notifyJourneysChanged } from "@/lib/journeyEvents";
@@ -31,8 +32,13 @@ export type Position = { lat: number; lon: number; accuracy: number };
 
 /** Fixes worse than this (IP/Wi-Fi guesses) can't verify a visit. */
 export const MAX_ACCURACY_M = 1500;
-/** Notable places from the map count when you're this close. */
-const PLACE_RADIUS_KM = 1;
+/** Notable places from the map count when you're this close: at the gate,
+ * not somewhere in the same neighbourhood. */
+export const PLACE_RADIUS_KM = 0.4;
+/** Quest spots (a whole sakura avenue, a festival area) are a bit wider. */
+const QUEST_RADIUS_KM = 2;
+/** Notable places this far away are shown as "a short walk away". */
+const PLACE_LOOKUP_M = 1500;
 /** Saved places / quest spots further than this aren't listed at all. */
 const LIST_RADIUS_KM = 15;
 
@@ -101,17 +107,22 @@ export type NearbyPlace = { pageid: number; title: string; lat: number; lon: num
 const NOT_A_PLACE =
   /(市|町|村|区|郡|丁目|地方|道路|線|インターチェンジ|ジャンクション|交差点|小学校|中学校|高等学校|大学|病院|郵便局|警察署|消防署|役所|役場|一覧)$/;
 
-// Notable places (Wikipedia articles) within ~1.5km.
+// Sights (Wikipedia articles) within ~1.5km: shrines, temples, castles,
+// parks, museums… Wikipedia also has articles on every station, school and
+// company around, which aren't somewhere you'd check in.
 export async function nearbyNotable(lat: number, lon: number): Promise<NearbyPlace[]> {
   try {
     const response = await fetch(
-      `https://ja.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=1500&gslimit=30&format=json&origin=*`,
+      `https://ja.wikipedia.org/w/api.php?action=query&list=geosearch&gscoord=${lat}%7C${lon}&gsradius=${PLACE_LOOKUP_M}&gslimit=100&format=json&origin=*`,
     );
     const data = (await response.json()) as {
       query?: { geosearch?: { pageid: number; title: string; lat: number; lon: number; dist: number }[] };
     };
     return (data.query?.geosearch ?? [])
-      .filter((item) => !NOT_A_PLACE.test(item.title.replace(/\s*\(.*\)$/, "")))
+      .filter((item) => {
+        const name = item.title.replace(/\s*\(.*\)$/, "");
+        return isLikelyAttraction(name) && !NOT_A_PLACE.test(name);
+      })
       .slice(0, 12)
       .map((item) => ({ pageid: item.pageid, title: item.title, lat: item.lat, lon: item.lon, distM: item.dist }));
   } catch {
@@ -200,7 +211,7 @@ export function buildCandidates(
         latitude: spot.latitude,
         longitude: spot.longitude,
         km,
-        radiusKm: 6,
+        radiusKm: QUEST_RADIUS_KM,
         doneToday: false,
       });
     }
@@ -232,9 +243,14 @@ export function buildCandidates(
   }
 
   all.sort((a, b) => a.km - b.km);
+  const near = all.filter((item) => item.km > item.radiusKm);
   return {
     here: all.filter((item) => item.km <= item.radiusKm),
-    near: all.filter((item) => item.km > item.radiusKm && item.target.kind !== "place").slice(0, 6),
+    // Your own places first, then a few sights a short walk away.
+    near: [
+      ...near.filter((item) => item.target.kind !== "place").slice(0, 6),
+      ...near.filter((item) => item.target.kind === "place").slice(0, 4),
+    ],
   };
 }
 

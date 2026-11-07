@@ -1,8 +1,10 @@
 import { normalizePhotoUrl } from "@/lib/photos";
 type WikipediaSummary = {
+  type?: string;
   extract?: string;
   thumbnail?: { source: string };
   originalimage?: { source: string };
+  coordinates?: { lat: number; lon: number };
 };
 
 type MediaListItem = {
@@ -15,6 +17,8 @@ type MediaListItem = {
 export type DestinationSummary = {
   description: string;
   imageUrl?: string;
+  // Where the article's subject is, when it says.
+  coordinates?: { latitude: number; longitude: number };
 };
 
 export async function getDestinationSummary(
@@ -27,11 +31,20 @@ export async function getDestinationSummary(
     if (!response.ok) return null;
 
     const result = (await response.json()) as WikipediaSummary;
-    if (!result.extract?.trim()) return null;
+    // A list of same-named places says nothing about this one.
+    if (result.type === "disambiguation" || !result.extract?.trim()) return null;
 
     return {
       description: result.extract.trim(),
       imageUrl: result.originalimage?.source ?? result.thumbnail?.source,
+      ...(result.coordinates
+        ? {
+            coordinates: {
+              latitude: result.coordinates.lat,
+              longitude: result.coordinates.lon,
+            },
+          }
+        : {}),
     };
   } catch {
     return null;
@@ -60,6 +73,70 @@ const NON_PHOTO =
 export function looksLikePhoto(nameOrUrl: string): boolean {
   return !NON_PHOTO.test(nameOrUrl);
 }
+
+// Old and new forms of kanji that place names and file names mix freely
+// (國坂神社 / 国坂神社).
+const KANJI_VARIANTS: Record<string, string> = {
+  國: "国", 舊: "旧", 濱: "浜", 澤: "沢", 嶋: "島", 嶌: "島", 邊: "辺", 邉: "辺",
+  龍: "竜", 櫻: "桜", 廣: "広", 寳: "宝", 寶: "宝", 會: "会", 繪: "絵", 圓: "円",
+  靈: "霊", 齋: "斎", 齊: "斉", 眞: "真", 德: "徳", 惠: "恵", 豐: "豊", 瀧: "滝",
+  峯: "峰", 槇: "槙", 髙: "高", 﨑: "崎", 嵜: "崎", 藏: "蔵", 佛: "仏", 禪: "禅",
+  縣: "県", 驛: "駅", 觀: "観", 臺: "台", 檜: "桧",
+};
+
+function normalizeName(text: string): string {
+  return text
+    .normalize("NFKC")
+    .replace(/[\s　_・·\-–—'’"“”「」『』()（）[\]【】]/g, "")
+    .replace(/./g, (char) => KANJI_VARIANTS[char] ?? char)
+    .toLowerCase();
+}
+
+// Words that, alone, would match photos of any shrine, any onsen...
+const GENERIC_PART =
+  /^(神社|寺|寺院|温泉|公園|庭園|城|城跡|滝|山|湖|美術館|博物館|資料館|展望台|駅|道の駅|本殿|拝殿|本堂|旧|新)$/;
+
+// What a photo's file name must contain to be about this place: the whole
+// name, or one of its distinctive parts ("有馬温泉 金の湯" → 金の湯).
+export function placeNameKeys(name: string): string[] {
+  const bare = name.replace(/\s*[(（][^()（）]*[)）]$/, "");
+  const keys = new Set([normalizeName(bare)]);
+  for (const part of bare.split(/[\s　・]+/)) {
+    const key = normalizeName(part);
+    if (key.length >= 3 && !GENERIC_PART.test(part)) keys.add(key);
+  }
+  return [...keys].filter((key) => key.length >= 2);
+}
+
+// File names and URLs, percent-encoded or not.
+function readable(text: string): string {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return text;
+  }
+}
+
+export function titleMatchesPlace(title: string, keys: string[]): boolean {
+  if (!keys.length) return true;
+  const text = normalizeName(readable(title));
+  return keys.some((key) => text.includes(key));
+}
+
+// For photos found only by location: words that show the file is of the
+// kind of place we're sending someone to, and ones that show it isn't
+// (roads, junctions, stations, traffic...).
+const GENRE_WORDS: Record<string, RegExp> = {
+  shrine: /神社|神宮|大社|寺|院|鳥居|社殿|本殿|拝殿|本堂|境内|山門|五重塔|三重塔|shrine|jinja|jingu|temple|torii|pagoda|-ji\b|-in\b/i,
+  history: /城|遺跡|古墳|史跡|石垣|天守|castle|ruins?\b|tumulus|kofun|historic/i,
+  nature: /滝|渓谷|峡|湖|池|森|林|海岸|浜|岬|公園|庭園|花|桜|紅葉|高原|falls|waterfall|gorge|valley|lake|pond|forest|beach|coast|cape|park|garden|blossom|autumn/i,
+  viewpoint: /展望|夜景|眺望|眺め|山頂|灯台|タワー|view|observatory|lookout|tower|lighthouse|panorama|summit/i,
+  museum: /美術館|博物館|資料館|記念館|museum|gallery/i,
+  "hot-spring": /温泉|湯|onsen|hot ?spring|spa|足湯/i,
+  food: /酒|蔵|醸造|市場|食|料理|道の駅|brewery|sake|winery|market|michi-no-eki|food/i,
+};
+const OFF_TOPIC =
+  /国道|県道|府道|道道|市道|道路|交差点|踏切|線路|高速|IC\b|インター|バス|信号|標識|看板|駐車場|road|route|street|avenue|intersection|crossing|junction|interchange|expressway|highway|railway|bus|truck|traffic|signal|parking|sign\b/i;
 
 // Photos on the place's Wikipedia article, pulled from Wikimedia Commons via
 // the REST media-list endpoint. Icons, maps and non-photo files are skipped.
@@ -107,7 +184,11 @@ type GeoSearchPage = {
 export async function searchCommonsPhotos(
   query: string,
   limit = 6,
+  // When given, only files whose name mentions the place (Commons' text
+  // search also matches descriptions that merely mention the prefecture).
+  placeName?: string,
 ): Promise<string[]> {
+  const keys = placeName ? placeNameKeys(placeName) : [];
   try {
     const url =
       "https://commons.wikimedia.org/w/api.php" +
@@ -124,6 +205,7 @@ export async function searchCommonsPhotos(
     for (const page of Object.values(data.query?.pages ?? {})) {
       const title = page.title ?? "";
       if (!/\.(jpe?g|png|webp)$/i.test(title) || !looksLikePhoto(title)) continue;
+      if (!titleMatchesPlace(title, keys)) continue;
       const thumb = page.imageinfo?.[0]?.thumburl;
       if (thumb && !urls.includes(thumb)) urls.push(thumb);
       if (urls.length >= limit) break;
@@ -192,19 +274,27 @@ export async function getDestinationFacts(
   }
 }
 
-// Last-resort photo source: pictures taken near the place's coordinates,
-// via the Wikimedia Commons geosearch API (no key, CORS-enabled).
+// Last-resort photo source: pictures taken right by the place, via the
+// Wikimedia Commons geosearch API (no key, CORS-enabled). Only ones named
+// after the place, or clearly of its kind (a torii by a shrine) and not of
+// the road outside it.
 export async function getNearbyPhotos(
   latitude: number,
   longitude: number,
+  place: { name: string; categories: string[] },
   limit = 6,
 ): Promise<string[]> {
+  const keys = placeNameKeys(place.name);
+  const kinds = place.categories.map((category) => GENRE_WORDS[category]).filter(Boolean);
+  const relevant = (title: string) =>
+    titleMatchesPlace(title, keys) ||
+    (!OFF_TOPIC.test(title) && kinds.some((words) => words.test(title)));
   try {
     const url =
       "https://commons.wikimedia.org/w/api.php" +
       `?action=query&format=json&origin=*` +
       `&generator=geosearch&ggscoord=${latitude}%7C${longitude}` +
-      `&ggsradius=1500&ggslimit=20&ggsnamespace=6` +
+      `&ggsradius=600&ggslimit=30&ggsnamespace=6` +
       `&prop=imageinfo&iiprop=url&iiurlwidth=960`;
     const response = await fetch(url);
     if (!response.ok) return [];
@@ -217,7 +307,7 @@ export async function getNearbyPhotos(
     for (const page of pages) {
       const title = page.title ?? "";
       if (!/\.(jpe?g|png|webp)$/i.test(title)) continue;
-      if (!looksLikePhoto(title)) continue;
+      if (!looksLikePhoto(title) || !relevant(title)) continue;
       const thumb = page.imageinfo?.[0]?.thumburl;
       if (!thumb || urls.includes(thumb)) continue;
       urls.push(thumb);

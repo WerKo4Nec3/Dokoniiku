@@ -668,6 +668,18 @@ html[data-scene-ink="light"]:not(.dark) .scene-copy {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   border-color: rgb(255 255 255 / 0.08);
 }
+/* Phones: a lighter blur over the animated scene keeps scrolling and the
+   genre panel smooth; the denser tint keeps the text just as readable. */
+@media (max-width: 640px) {
+  .scene-glass {
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(8px);
+  }
+  .dark .scene-glass {
+    background: color-mix(in srgb, var(--surface) 85%, transparent);
+  }
+}
 
 /* The header melts into the scene while one is on screen. */
 html[data-scene="on"] .app-header {
@@ -677,27 +689,137 @@ html[data-scene="on"] .app-header {
   backdrop-filter: none;
 }
 
-/* Primary pill and round stepper used on the scene screens. */
+/* In the components layer, so Tailwind utilities on the same element
+   (padding, width, display…) still win. */
+@layer components {
+  /* ---- Chunky "3D" buttons (think Duolingo): a solid, darker edge under
+     the face that the button sinks into when pressed. Colours via
+     --btn-face / --btn-edge / --btn-ink; variants below. ------------------ */
+  .btn-3d {
+    --btn-face: rgb(var(--c-vermilion));
+    --btn-edge: color-mix(in srgb, var(--btn-face) 68%, #000);
+    --btn-ink: #fff;
+    --btn-depth: 4px;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 3rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 1rem;
+    background: var(--btn-face);
+    color: var(--btn-ink);
+    font-size: 0.875rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    box-shadow: 0 var(--btn-depth) 0 var(--btn-edge);
+    transition:
+      transform 0.08s ease,
+      box-shadow 0.08s ease,
+      filter 0.15s ease,
+      opacity 0.15s ease;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+  .btn-3d:hover:not(:disabled) {
+    filter: brightness(1.06);
+  }
+  .btn-3d:active:not(:disabled),
+  .btn-3d[aria-pressed="true"] {
+    transform: translateY(var(--btn-depth));
+    box-shadow: 0 0 0 var(--btn-edge);
+  }
+  .btn-3d:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+  .btn-3d:focus-visible {
+    outline: 3px solid color-mix(in srgb, var(--btn-face) 45%, transparent);
+    outline-offset: 3px;
+  }
+  .btn-3d-forest {
+    --btn-face: rgb(var(--c-forest));
+  }
+  /* Fixed greens/reds: "yes" and "no" keep their meaning in every palette. */
+  .btn-3d-green {
+    --btn-face: #58b72b;
+    --btn-edge: #3f8f1c;
+  }
+  .btn-3d-red {
+    --btn-face: #ec4f43;
+    --btn-edge: #b9332a;
+  }
+  /* White (dark: surface) face, grey outline and edge. */
+  .btn-3d-plain {
+    --btn-face: var(--surface);
+    --btn-edge: var(--line);
+    --btn-ink: var(--foreground);
+    border: 2px solid var(--line);
+  }
+  .btn-3d-plain:hover:not(:disabled) {
+    filter: none;
+    background: color-mix(in srgb, var(--surface-muted) 55%, var(--surface));
+  }
+  .btn-3d-sm {
+    --btn-depth: 3px;
+    min-height: 2.25rem;
+    padding: 0.4rem 0.9rem;
+    border-radius: 0.8rem;
+    font-size: 0.75rem;
+  }
+  .btn-3d-lg {
+    --btn-depth: 5px;
+    min-height: 3.5rem;
+    padding: 1rem 1.75rem;
+    font-size: 0.95rem;
+  }
+
+  /* Cards with the same chunky edge. */
+  .card-3d {
+    border: 2px solid var(--line);
+    box-shadow: 0 4px 0 var(--line);
+  }
+}
+
+/* Primary button and round stepper used on the scene screens. */
 .scene-cta {
   display: inline-flex;
   align-items: center;
   gap: 0.75rem;
-  border-radius: 9999px;
+  border-radius: 1.1rem;
   background: rgb(var(--c-vermilion));
   padding: 1rem 2rem;
   font-size: 0.875rem;
-  font-weight: 700;
+  font-weight: 900;
   letter-spacing: 0.2em;
   color: #fff;
-  box-shadow: 0 14px 30px -12px rgb(var(--c-vermilion) / 0.75);
-  transition: filter 0.2s ease, opacity 0.2s ease;
+  box-shadow:
+    0 5px 0 color-mix(in srgb, rgb(var(--c-vermilion)) 68%, #000),
+    0 16px 28px -14px rgb(var(--c-vermilion) / 0.7);
+  transition:
+    transform 0.08s ease,
+    box-shadow 0.08s ease,
+    filter 0.2s ease,
+    opacity 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 .scene-cta:hover:not(:disabled) {
   filter: brightness(1.07);
 }
+.scene-cta:active:not(:disabled) {
+  transform: translateY(5px);
+  box-shadow: 0 0 0 color-mix(in srgb, rgb(var(--c-vermilion)) 68%, #000);
+}
 .scene-cta:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn-3d,
+  .scene-cta {
+    transition: none;
+  }
 }
 .scene-round {
   display: grid;

@@ -49,7 +49,7 @@ export function PlaceReviews({ placeId, className = "" }: { placeId: string; cla
   const average = reviews.reduce((sum, item) => sum + item.rating, 0) / reviews.length;
 
   return (
-    <section className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}>
+    <section className={`card-3d rounded-[24px] bg-[color:var(--surface)] p-5 ${className}`}>
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-black">みんなの旅の記録</h3>
         <span className="inline-flex items-center gap-1 text-xs font-bold text-[color:var(--muted)]">

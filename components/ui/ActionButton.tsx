@@ -12,18 +12,18 @@ export function ActionButton({
   className = "",
   ...props
 }: ActionButtonProps) {
+  // Primary and secondary are the chunky 3D buttons (globals.css .btn-3d).
   const variants = {
-    primary:
-      "bg-vermilion text-white shadow-lg shadow-vermilion/20 hover:opacity-90",
-    secondary:
-      "border border-[color:var(--line)] bg-[color:var(--surface)] text-[color:var(--foreground)] hover:bg-[color:var(--surface-muted)]",
+    primary: "btn-3d",
+    secondary: "btn-3d btn-3d-plain",
     ghost:
-      "text-[color:var(--foreground)] hover:bg-black/5 dark:hover:bg-white/10",
+      "inline-flex min-h-12 items-center justify-center gap-2 rounded-2xl px-5 text-sm font-bold text-[color:var(--foreground)] transition hover:bg-black/5 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/10",
   };
 
   return (
     <button
-      className={`inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-5 text-sm font-bold transition active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 ${variants[variant]} ${className}`}
+      type="button"
+      className={`${variants[variant]} ${className}`}
       {...props}
     >
       {icon}

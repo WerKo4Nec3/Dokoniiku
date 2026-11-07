@@ -62,40 +62,38 @@ export function PlaceRating({
   const up = rating?.up ?? 0;
   const down = rating?.down ?? 0;
   const mine = rating?.myVote ?? 0;
-  const btn = (active: boolean, tone: "up" | "down") =>
-    `inline-flex flex-1 items-center justify-center gap-2 rounded-lg border px-4 py-2.5 text-sm font-black transition disabled:opacity-60 ${
-      active
-        ? tone === "up"
-          ? "border-forest bg-forest/10 text-forest dark:border-forest-ink dark:text-forest-ink"
-          : "border-vermilion bg-vermilion/10 text-vermilion"
-        : "border-[color:var(--line)] text-[color:var(--muted)] hover:text-[color:var(--foreground)]"
-    }`;
+  // Your vote stays pressed in; the other one steps back a little.
+  const dim = (value: Vote) => (mine !== 0 && mine !== value ? "opacity-60" : "");
 
   return (
     <div
-      className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}
+      className={`card-3d rounded-[24px] bg-[color:var(--surface)] p-5 ${className}`}
     >
       <p className="text-xs font-bold text-[color:var(--muted)]">この場所、どうだった？</p>
-      <div className="mt-3 flex gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={() => vote(1)}
           disabled={busy}
           aria-pressed={mine === 1}
-          className={btn(mine === 1, "up")}
+          aria-label={`よかった（${up}）`}
+          title="よかった"
+          className={`btn-3d btn-3d-green btn-3d-lg w-full ${dim(1)}`}
         >
-          <ThumbsUp size={16} /> よかった
-          <span className="tabular-nums opacity-80">{up}</span>
+          <ThumbsUp size={24} strokeWidth={2.6} fill={mine === 1 ? "currentColor" : "none"} />
+          <span className="tabular-nums">{up}</span>
         </button>
         <button
           type="button"
           onClick={() => vote(-1)}
           disabled={busy}
           aria-pressed={mine === -1}
-          className={btn(mine === -1, "down")}
+          aria-label={`いまいち（${down}）`}
+          title="いまいち"
+          className={`btn-3d btn-3d-red btn-3d-lg w-full ${dim(-1)}`}
         >
-          <ThumbsDown size={16} /> いまいち
-          <span className="tabular-nums opacity-80">{down}</span>
+          <ThumbsDown size={24} strokeWidth={2.6} fill={mine === -1 ? "currentColor" : "none"} />
+          <span className="tabular-nums">{down}</span>
         </button>
       </div>
       {mine === -1 && (

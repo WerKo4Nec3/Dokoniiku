@@ -88,9 +88,14 @@ export function bearingOffset(from: Coordinates, to: Coordinates, direction: Dir
   return angularDifference(bearingDegrees(from, to), directionAngle[direction]);
 }
 
-// Prefectures within this distance from the start point count as a
-// "nearby" (day-trip friendly) option.
-export const NEARBY_PREFECTURE_LIMIT_KM = 350;
+// Prefectures whose capital is within this distance from the start point
+// count as a "nearby" (day-trip friendly) option: from Kobe that's Kansai,
+// Okayama, Tottori, Tokushima, Kagawa, Mie, Gifu, Aichi, Fukui and Kochi —
+// not Ishikawa or Hiroshima, which are 250km away.
+export const NEARBY_PREFECTURE_LIMIT_KM = 200;
+// ...and places in them farther than this are left out (a prefecture like
+// Hyogo or Hokkaido reaches far beyond a day trip).
+export const NEARBY_PLACE_LIMIT_KM = 220;
 
 export function pickPrefecture(
   direction: Direction,

@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/auth/AuthProvider";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
 import { fetchProfile } from "@/lib/api/profile";
 import { ensurePublicProfile, getPublicProfile, listFriendProfiles } from "@/lib/api/social";
-import { statusOf } from "@/lib/utils/travel";
+import { publicStatsFor } from "@/lib/publicStats";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { CabinetHeader } from "@/components/CabinetHeader";
 import { ProfileBody } from "@/components/profile/ProfileBody";
@@ -24,6 +24,7 @@ export default function ProfilePage() {
   const { enabled, loading, user, journeys } = useUserJourneys();
   const openJourney = useOpenJourney();
   const [profile, setProfile] = useState<TabibitoProfile | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [friends, setFriends] = useState<PublicProfile[]>([]);
   const [friendCode, setFriendCode] = useState<string | undefined>();
   const [editing, setEditing] = useState(false);
@@ -41,7 +42,10 @@ export default function ProfilePage() {
       .then((data) => {
         if (active && data) setProfile(data);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => {
+        if (active) setProfileReady(true);
+      });
     listFriendProfiles(user.uid)
       .then((items) => {
         if (active) setFriends(items);
@@ -60,17 +64,23 @@ export default function ProfilePage() {
   }, [user]);
 
   const list = useMemo(() => journeys ?? [], [journeys]);
-  const visitedCount = useMemo(() => list.filter((journey) => statusOf(journey) === "done").length, [list]);
+  const stats = useMemo(() => (journeys ? publicStatsFor(journeys) : null), [journeys]);
 
   const hasGoogle = user?.providerData.some((item) => item.providerId === "google.com") ?? false;
   const displayName = profile?.displayName?.trim() || user?.displayName?.trim() || "旅人";
 
-  // Keep the public profile (friend search) in sync with edits here.
+  // What others see on your profile page (/u/…) follows your travels and
+  // your edits here.
+  useEffect(() => {
+    if (!user || !stats || !profileReady) return;
+    ensurePublicProfile(user.uid, { ...profile, displayName, ...stats }).catch(() => {});
+    // displayName derives from profile/user.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, stats, profile, profileReady]);
+
+  // Edits reach the public profile through the effect above.
   function handleSaved(next: TabibitoProfile) {
     setProfile(next);
-    if (user) {
-      ensurePublicProfile(user.uid, { ...next, visitedCount }).catch(() => {});
-    }
   }
 
   return (
@@ -91,7 +101,7 @@ export default function ProfilePage() {
           <button
             type="button"
             onClick={() => openAuthDialog()}
-            className="mt-4 inline-flex items-center gap-2 rounded-full bg-forest px-5 py-2.5 text-sm font-bold text-white transition hover:opacity-90"
+            className="btn-3d btn-3d-forest mt-4"
           >
             ログイン / 新規登録
           </button>

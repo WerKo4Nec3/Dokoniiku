@@ -48,7 +48,7 @@ export function LiveWeatherCard({
 
   const Icon = weather ? ICONS[weather.icon] : Cloud;
   return (
-    <section className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}>
+    <section className={`card-3d rounded-[24px] bg-[color:var(--surface)] p-5 ${className}`}>
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-black">現地の天気</h3>
         <button

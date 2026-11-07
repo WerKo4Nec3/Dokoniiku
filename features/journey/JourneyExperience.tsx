@@ -108,6 +108,7 @@ import {
   journeyDifficulty,
   lodgingInfo,
   lodgingTypes,
+  NEARBY_PLACE_LIMIT_KM,
   NEARBY_PREFECTURE_LIMIT_KM,
   pickDirection,
   pickPrefecture,
@@ -135,6 +136,7 @@ import {
 } from "@/components/DifficultyBadge";
 import {
   CATEGORY_ORDER,
+  CategoryArt,
   CategoryCard,
 } from "@/components/journey/CategoryCard";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
@@ -275,7 +277,9 @@ const heroItem = {
   },
 };
 
-// Smoothly expands/collapses togglable panels.
+// Shows/hides togglable panels. Only opacity and a small slide are animated:
+// growing the height frame by frame re-laid out the page and re-blurred the
+// frosted panel behind it on every frame, which stuttered on phones.
 function ExpandPanel({
   open,
   className,
@@ -289,11 +293,11 @@ function ExpandPanel({
     <AnimatePresence initial={false}>
       {open && (
         <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: "auto" }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className={`w-full overflow-hidden ${className ?? ""}`}
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, transition: { duration: 0.1 } }}
+          transition={{ duration: 0.2, ease: "easeOut" }}
+          className={`w-full ${className ?? ""}`}
         >
           {children}
         </motion.div>
@@ -326,7 +330,7 @@ function KnobCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-4">
+    <div className="card-3d rounded-2xl bg-[color:var(--surface)] p-4">
       <div className="flex items-center justify-between gap-3">
         <span className="inline-flex items-center gap-2 text-sm font-bold text-[color:var(--foreground)]">
           <span className="grid h-8 w-8 place-items-center rounded-full bg-vermilion/10 text-vermilion">
@@ -388,6 +392,11 @@ const DISTANCE_MAX = 800;
 const BIKE_RANGE_MIN = 20;
 const BIKE_RANGE_MAX = 300;
 const SHUFFLE_COUNT = 4;
+// An article whose subject is farther than this from the place is about a
+// same-named place elsewhere.
+const NAMESAKE_KM = 5;
+// Places whose photos are looked up per deal (one Wikipedia request).
+const SHUFFLE_SHORTLIST = 40;
 // Up to this one-way reach, the prefecture is chosen from the places actually
 // within reach in the compass direction (beyond it, by its capital).
 const SCOUT_MAX_REACH_KM = 150;
@@ -501,6 +510,9 @@ export function JourneyExperience() {
     placesNotice?: string;
   } | null>(null);
   const [shuffleOptions, setShuffleOptions] = useState<Plan[]>([]);
+  // Card photos looked up for the current pool (null: the place has none).
+  const photoCache = useRef(new Map<string, string | null>());
+  const [dealing, setDealing] = useState(false);
   const [shuffleHover, setShuffleHover] = useState<string | null>(null);
   const [revealTarget, setRevealTarget] = useState<{
     latitude: number;
@@ -886,6 +898,14 @@ export function JourneyExperience() {
         (item) =>
           haversineDistanceKm(start, item) <= NEARBY_PREFECTURE_LIMIT_KM,
       );
+      // Far from every capital (an island, say): the closest one at least.
+      if (!pool.length) {
+        pool = [
+          prefectures.reduce((best, item) =>
+            haversineDistanceKm(start, item) < haversineDistanceKm(start, best) ? item : best,
+          ),
+        ];
+      }
     }
     const next = pickPrefecture(direction, start, pool);
     setPrefecture(next);
@@ -908,7 +928,14 @@ export function JourneyExperience() {
     const places = await getAttractionsByPrefecture(prefecture, selectedCategories, near);
     // Drop places the community disliked (and ones you 👎'd yourself).
     const excluded = await getExcludedPlaceIds(user?.uid);
-    const candidates = places.data.filter((place) => !excluded.has(place.id));
+    let candidates = places.data.filter((place) => !excluded.has(place.id));
+    // "近場": stay within a day trip even in a big prefecture.
+    if (journeyMode === "surprise" && scope === "nearby") {
+      const close = candidates.filter(
+        (place) => haversineDistanceKm(start, place) <= NEARBY_PLACE_LIMIT_KM,
+      );
+      if (close.length) candidates = close;
+    }
 
     setCandidateCache({
       key: `${prefecture.id}|${selectedCategories.join(",")}`,
@@ -996,13 +1023,23 @@ export function JourneyExperience() {
     const transport = plan.transport;
     const transfer = journeyMode === "custom" ? allowTransfer : false;
 
-    const [weather, summary, gallery, commons, openverse] = await Promise.all([
+    const [weather, foundSummary, foundGallery, commons, openverse] = await Promise.all([
       getWeatherByCoordinates(picked.latitude, picked.longitude),
       getDestinationSummary(picked.wikiTitle ?? picked.name),
       getDestinationImages(picked.wikiTitle ?? picked.name),
-      searchCommonsPhotos(`${picked.name} ${prefecture.nameJa}`),
-      getOpenversePhotos(`${picked.name} ${prefecture.nameJa}`),
+      searchCommonsPhotos(`${picked.name} ${prefecture.nameJa}`, 6, picked.name),
+      getOpenversePhotos(`${picked.name} ${prefecture.nameJa}`, 6, picked.name),
     ]);
+    // A place looked up by its bare name (an OpenStreetMap one with no
+    // article link, say) can hit the article of a namesake elsewhere —
+    // another 観音院 — whose text and photos are about the wrong place.
+    const byBareName = !picked.wikiTitle && !picked.id.startsWith("wiki-");
+    const namesake =
+      byBareName &&
+      foundSummary?.coordinates &&
+      haversineDistanceKm(foundSummary.coordinates, picked) > NAMESAKE_KM;
+    const summary = namesake ? null : foundSummary;
+    const gallery = namesake ? [] : foundGallery;
     // Lead with the article's hero image (unless it's a location/relief map,
     // common on small-place articles), then merge Wikimedia + Openverse photos.
     const candidateHero = summary?.imageUrl ?? picked.imageUrl;
@@ -1016,8 +1053,8 @@ export function JourneyExperience() {
       12,
     );
     if (!images.length) {
-      // No usable photo anywhere: fall back to photos near the coordinates.
-      images = await getNearbyPhotos(picked.latitude, picked.longitude);
+      // No usable photo anywhere: photos taken right there, if they show it.
+      images = await getNearbyPhotos(picked.latitude, picked.longitude, picked);
     }
     const heroImage = images[0];
     const destination = {
@@ -1112,45 +1149,67 @@ export function JourneyExperience() {
 
   // Shuffle mode: deal a hand of candidate cards and let the user pick one.
   async function startShuffle() {
-    if (!direction || !prefecture) return;
-    const built = await buildPlans();
-    if (!built) return;
-    setShufflePool(built);
-    dealCards(sampleWithPreference(built.plans, SHUFFLE_COUNT, readPreferences()));
-    setStage("shuffle");
-  }
-
-  // Show a hand of cards, then fill in photos (bulk searches come without).
-  function dealCards(hand: Plan[]) {
-    setShuffleOptions(hand);
-    const bare = hand.filter((plan) => !plan.destination.imageUrl);
-    if (!bare.length) return;
-    void getPlaceThumbnails(bare.map((plan) => plan.destination)).then((thumbnails) => {
-      if (!thumbnails.size) return;
-      setShuffleOptions((current) =>
-        current.map((plan) => {
-          const imageUrl = thumbnails.get(plan.destination.id);
-          return imageUrl && !plan.destination.imageUrl
-            ? { ...plan, destination: { ...plan.destination, imageUrl } }
-            : plan;
-        }),
-      );
-    });
-  }
-
-  function reshuffle() {
-    if (!shufflePool) return;
-    const shown = new Set(shuffleOptions.map((plan) => plan.destination.id));
-    const fresh = shufflePool.plans.filter((plan) => !shown.has(plan.destination.id));
-    // Prefer unseen places; top up from the full pool when running low.
-    const next = sampleItems(fresh, SHUFFLE_COUNT);
-    if (next.length < SHUFFLE_COUNT) {
-      const rest = shufflePool.plans.filter(
-        (plan) => !next.some((p) => p.destination.id === plan.destination.id),
-      );
-      next.push(...sampleItems(rest, SHUFFLE_COUNT - next.length));
+    if (!direction || !prefecture || dealing) return;
+    setDealing(true);
+    try {
+      const built = await buildPlans();
+      if (!built) return;
+      photoCache.current = new Map();
+      setShufflePool(built);
+      setShuffleOptions(await dealHand(built.plans));
+      setStage("shuffle");
+    } finally {
+      setDealing(false);
     }
-    dealCards(next);
+  }
+
+  // Picks a hand of cards, preferring places that have a photo: a shortlist
+  // (leaning toward favourite genres) gets its thumbnails looked up in one
+  // go, and the photo-less ones are dealt only when too few have one.
+  async function dealHand(plans: Plan[], shown?: Set<string>): Promise<Plan[]> {
+    const unseen = shown ? plans.filter((plan) => !shown.has(plan.destination.id)) : plans;
+    const shortlist = sampleWithPreference(
+      unseen,
+      Math.min(unseen.length, SHUFFLE_SHORTLIST),
+      readPreferences(),
+    );
+    const photos = photoCache.current;
+    const unknown = shortlist.filter(
+      (plan) => !plan.destination.imageUrl && !photos.has(plan.destination.id),
+    );
+    if (unknown.length) {
+      const found = await getPlaceThumbnails(unknown.map((plan) => plan.destination)).catch(
+        () => new Map<string, string>(),
+      );
+      for (const plan of unknown) {
+        photos.set(plan.destination.id, found.get(plan.destination.id) ?? null);
+      }
+    }
+    const withPhoto = (plan: Plan): Plan => {
+      const imageUrl = plan.destination.imageUrl ?? photos.get(plan.destination.id);
+      return imageUrl ? { ...plan, destination: { ...plan.destination, imageUrl } } : plan;
+    };
+    const ranked = shortlist.map(withPhoto);
+    const pictured = ranked.filter((plan) => plan.destination.imageUrl);
+    const bare = ranked.filter((plan) => !plan.destination.imageUrl);
+    let hand = [...pictured, ...bare].slice(0, SHUFFLE_COUNT);
+    // Running out of new places: top up with ones shown before.
+    if (hand.length < SHUFFLE_COUNT && shown) {
+      const before = plans.filter((plan) => shown.has(plan.destination.id));
+      hand = [...hand, ...sampleItems(before, SHUFFLE_COUNT - hand.length).map(withPhoto)];
+    }
+    return sampleItems(hand, hand.length);
+  }
+
+  async function reshuffle() {
+    if (!shufflePool || dealing) return;
+    setDealing(true);
+    try {
+      const shown = new Set(shuffleOptions.map((plan) => plan.destination.id));
+      setShuffleOptions(await dealHand(shufflePool.plans, shown));
+    } finally {
+      setDealing(false);
+    }
   }
 
   function chooseShuffleOption(plan: Plan) {
@@ -1317,7 +1376,8 @@ export function JourneyExperience() {
       <button
         type="button"
         onClick={() => setFiltersOpen((open) => !open)}
-        className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+        aria-expanded={filtersOpen}
+        className="btn-3d btn-3d-plain btn-3d-sm"
       >
         <SlidersHorizontal size={14} />
         ジャンルで絞る（任意）
@@ -1963,7 +2023,7 @@ export function JourneyExperience() {
                   type="button"
                   onClick={beginDirectionSelection}
                   disabled={selecting}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-6 py-3.5 text-sm font-bold text-[color:var(--foreground)] transition hover:border-vermilion/60 disabled:opacity-50"
+                  className="btn-3d btn-3d-plain btn-3d-lg"
                 >
                   <motion.span
                     className="inline-flex"
@@ -2070,7 +2130,8 @@ export function JourneyExperience() {
                     <button
                       type="button"
                       onClick={() => setSettingsOpen((open) => !open)}
-                      className="inline-flex items-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-4 py-2 text-xs font-bold text-[color:var(--muted)] transition hover:text-[color:var(--foreground)]"
+                      aria-expanded={settingsOpen}
+                      className="btn-3d btn-3d-plain btn-3d-sm"
                     >
                       <SlidersHorizontal size={14} />
                       予算・日数・移動手段を調整
@@ -2089,10 +2150,11 @@ export function JourneyExperience() {
                   <button
                     type="button"
                     onClick={startShuffle}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-[color:var(--line)] bg-[color:var(--surface)] px-6 py-3.5 text-sm font-bold text-[color:var(--foreground)] transition hover:border-vermilion/60"
+                    disabled={dealing}
+                    className="btn-3d btn-3d-plain btn-3d-lg"
                   >
-                    <Shuffle size={16} />
-                    4つの候補から選ぶ
+                    <Shuffle size={16} className={dealing ? "animate-spin" : ""} />
+                    {dealing ? "候補を探してるよ…" : "4つの候補から選ぶ"}
                   </button>
                 </div>
                 <button
@@ -2161,9 +2223,9 @@ export function JourneyExperience() {
                   initial={{ opacity: 0, y: 24, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   transition={{ delay: index * 0.08, type: "spring", stiffness: 260, damping: 22 }}
-                  whileHover={{ y: -6, scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  className={`group overflow-hidden rounded-lg border border-[color:var(--line)] bg-[color:var(--surface)] text-left shadow-float transition hover:border-vermilion/60 ${difficultyFrameClass(difficulty)}`}
+                  whileHover={{ y: -4 }}
+                  whileTap={{ y: 3 }}
+                  className={`card-3d group overflow-hidden rounded-[20px] bg-[color:var(--surface)] text-left transition-colors hover:border-vermilion/60 ${difficultyFrameClass(difficulty)}`}
                 >
                   <div className="relative h-32 overflow-hidden bg-forest/10">
                     {plan.destination.imageUrl ? (
@@ -2175,9 +2237,11 @@ export function JourneyExperience() {
                         className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                       />
                     ) : (
-                      <div className="grid h-full w-full place-items-center text-forest-ink/50 dark:text-forest-ink/50">
-                        <MapPin size={32} />
-                      </div>
+                      // No photo anywhere: the genre's painted scene instead.
+                      <CategoryArt
+                        category={plan.destination.categories[0] ?? "nature"}
+                        className="h-full w-full transition duration-500 group-hover:scale-105"
+                      />
                     )}
                     <DifficultyBadge
                       difficulty={difficulty}
@@ -2224,11 +2288,12 @@ export function JourneyExperience() {
             </p>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <ActionButton
-                variant="ghost"
+                variant="secondary"
                 onClick={reshuffle}
-                icon={<Shuffle size={17} />}
+                disabled={dealing}
+                icon={<Shuffle size={17} className={dealing ? "animate-spin" : ""} />}
               >
-                引き直す
+                {dealing ? "引いてるよ…" : "引き直す"}
               </ActionButton>
               <button
                 type="button"
@@ -2386,6 +2451,17 @@ export function JourneyExperience() {
                       : []
                 }
                 alt={journey.destination.name}
+                fallback={
+                  <>
+                    <CategoryArt
+                      category={journey.destination.categories[0] ?? "nature"}
+                      className="absolute inset-0 h-full w-full"
+                    />
+                    <span className="absolute bottom-3 left-3 rounded-full bg-black/45 px-3 py-1 text-[11px] font-bold text-white">
+                      写真はまだないみたい。現地で撮ってきてね！
+                    </span>
+                  </>
+                }
                 frameClass={difficultyFrameClass(
                   journeyDifficulty(
                     journey.distanceKm,
@@ -2415,7 +2491,7 @@ export function JourneyExperience() {
                 （各画像の著作権は投稿者に帰属します）
               </p>
 
-              <div className="order-2 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-6 lg:order-none">
+              <div className="order-2 card-3d rounded-[24px] bg-[color:var(--surface)] p-6 lg:order-none">
                 <h3 className="text-sm font-black">この場所について</h3>
                 <p className="mt-3 text-sm font-medium leading-7 text-[color:var(--foreground)]">
                   {journey.destination.description}
@@ -2525,7 +2601,7 @@ export function JourneyExperience() {
                 longitude={journey.destination.longitude}
               />
 
-              <div className="order-12 min-w-0 overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] lg:order-none">
+              <div className="order-12 min-w-0 overflow-hidden card-3d rounded-[24px] bg-[color:var(--surface)] lg:order-none">
                 <PlaceMap
                   key={journey.destination.id}
                   latitude={journey.destination.latitude}
@@ -2545,7 +2621,7 @@ export function JourneyExperience() {
                 </div>
               </div>
 
-              <div className="order-12 flex flex-col gap-4 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
+              <div className="order-12 flex flex-col gap-4 card-3d rounded-[24px] bg-[color:var(--surface)] p-5 sm:flex-row sm:items-center sm:justify-between lg:order-none">
                 <div className="flex items-center gap-3">
                   <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-forest/10 text-forest dark:bg-forest-ink/10 dark:text-forest-ink">
                     <MapPin size={20} />
@@ -2563,7 +2639,7 @@ export function JourneyExperience() {
                   href={googleMapsSearchUrl(journey.destination)}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex min-h-12 items-center justify-center gap-2 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] px-5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)]"
+                  className="inline-flex min-h-12 items-center justify-center gap-2 card-3d rounded-[24px] bg-[color:var(--surface)] px-5 text-sm font-bold transition hover:bg-[color:var(--surface-muted)]"
                 >
                   Google Mapsで見る
                   <ExternalLink size={16} />
@@ -2572,7 +2648,7 @@ export function JourneyExperience() {
             </div>
 
             <div className="contents lg:block lg:min-w-0 lg:space-y-4">
-              <div className="order-3 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
+              <div className="order-3 card-3d rounded-[24px] bg-[color:var(--surface)] p-5 lg:order-none">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-[color:var(--muted)]">
@@ -2629,7 +2705,7 @@ export function JourneyExperience() {
               </div>
 
               <div className="order-4 grid grid-cols-2 gap-4 lg:order-none">
-                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                <div className="card-3d rounded-[24px] bg-[color:var(--surface)] p-5">
                   <TransportIcon
                     mode={journey.transport}
                     className="text-forest dark:text-forest-ink"
@@ -2646,7 +2722,7 @@ export function JourneyExperience() {
                       `（往復${journey.distanceKm * 2}km${journey.nights ? `・帰りは${journey.nights + 1}日目` : ""}）`}
                   </p>
                 </div>
-                <div className="rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5">
+                <div className="card-3d rounded-[24px] bg-[color:var(--surface)] p-5">
                   <WalletCards
                     size={21}
                     className="text-vermilion"
@@ -2675,7 +2751,7 @@ export function JourneyExperience() {
                 destination={journey.destination}
               />
 
-              <div className="order-5 rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 lg:order-none">
+              <div className="order-5 card-3d rounded-[24px] bg-[color:var(--surface)] p-5 lg:order-none">
                 <h3 className="text-sm font-black">
                   費用の内訳
                   <span className="ml-1.5 text-xs font-bold text-[color:var(--muted)]">
@@ -2779,7 +2855,7 @@ export function JourneyExperience() {
                 ))}
 
               <ActionButton
-                variant="ghost"
+                variant="secondary"
                 onClick={handleShare}
                 icon={shareFeedback ? <Check size={18} /> : <Share2 size={18} />}
                 className="order-8 w-full lg:order-none"
@@ -2788,7 +2864,7 @@ export function JourneyExperience() {
               </ActionButton>
 
               <ActionButton
-                variant="ghost"
+                variant="secondary"
                 onClick={handleCopyLink}
                 icon={linkCopied ? <Check size={18} /> : <Link2 size={18} />}
                 className="order-8 w-full lg:order-none"

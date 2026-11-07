@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Bookmark,
@@ -32,6 +33,7 @@ import {
   removeFriend,
   sendFriendRequest,
 } from "@/lib/api/social";
+import type { PublicStats } from "@/lib/publicStats";
 
 // Pull a friend code out of a scanned QR payload — either the invite URL
 // (…/friends?add=CODE) or a bare 6-char code.
@@ -50,7 +52,7 @@ export function FriendsPanel({
   uid,
   profile,
   fallbackName,
-  visitedCount,
+  stats,
   autoAddCode,
   onOpenJourney,
   onSaveShared,
@@ -58,7 +60,8 @@ export function FriendsPanel({
   uid: string;
   profile: TabibitoProfile | null;
   fallbackName: string;
-  visitedCount: number;
+  // Your travel summary for your public profile; null while loading.
+  stats: PublicStats | null;
   // A friend code arriving via a scanned invite link (?add=CODE).
   autoAddCode?: string | null;
   onOpenJourney: (journey: JourneyResult) => void;
@@ -101,7 +104,7 @@ export function FriendsPanel({
     ensurePublicProfile(uid, {
       ...profile,
       displayName: myName,
-      visitedCount,
+      ...stats,
     })
       .then((publicProfile) => {
         if (active && publicProfile) setMe(publicProfile);
@@ -112,7 +115,7 @@ export function FriendsPanel({
       active = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid, profile, visitedCount]);
+  }, [uid, profile, stats]);
 
   // Render my invite QR (link form, so any camera app can open it).
   useEffect(() => {
@@ -422,9 +425,12 @@ export function FriendsPanel({
                 key={request.id}
                 className="flex items-center justify-between gap-3 rounded-lg border border-vermilion/30 bg-vermilion/5 px-3 py-2"
               >
-                <span className="truncate text-sm font-bold">
+                <Link
+                  href={`/u/${request.fromUid}`}
+                  className="truncate text-sm font-bold underline-offset-2 hover:underline"
+                >
                   {request.fromName ?? "名もなき旅人"}
-                </span>
+                </Link>
                 <span className="flex shrink-0 gap-1.5">
                   <button
                     type="button"
@@ -467,23 +473,29 @@ export function FriendsPanel({
                 key={friend.uid}
                 className="flex items-center gap-3 rounded-lg border border-[color:var(--line)] px-3 py-2"
               >
-                <span
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg"
-                  style={{
-                    backgroundColor: `${friend.avatarColor ?? "#285f4d"}22`,
-                  }}
+                <Link
+                  href={`/u/${friend.uid}`}
+                  aria-label={`${friend.displayName ?? "旅人"}のプロフィール`}
+                  className="flex min-w-0 flex-1 items-center gap-3"
                 >
-                  {friend.avatarEmoji ?? "🐣"}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-bold">
-                    {friend.displayName ?? "名もなき旅人"}
+                  <span
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-lg"
+                    style={{
+                      backgroundColor: `${friend.avatarColor ?? "#285f4d"}22`,
+                    }}
+                  >
+                    {friend.avatarEmoji ?? "🐣"}
                   </span>
-                  <span className="block text-[11px] font-medium text-[color:var(--muted)]">
-                    制覇 {friend.visitedCount ?? 0}件
-                    {friend.bio ? ` ・ ${friend.bio}` : ""}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-bold">
+                      {friend.displayName ?? "名もなき旅人"}
+                    </span>
+                    <span className="block truncate text-[11px] font-medium text-[color:var(--muted)]">
+                      {friend.level ? `Lv.${friend.level} ・ ` : ""}制覇 {friend.visitedCount ?? 0}件
+                      {friend.bio ? ` ・ ${friend.bio}` : ""}
+                    </span>
                   </span>
-                </span>
+                </Link>
                 <button
                   type="button"
                   onClick={() => handleUnfriend(friend)}

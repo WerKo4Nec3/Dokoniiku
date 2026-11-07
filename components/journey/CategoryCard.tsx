@@ -153,6 +153,43 @@ function scene(category: DestinationCategory, ink: string): ReactNode {
   }
 }
 
+// The painted genre scene on its own: the filter cards, and the stand-in for
+// a place that has no photo.
+export function CategoryArt({
+  category,
+  className = "",
+}: {
+  category: DestinationCategory;
+  className?: string;
+}) {
+  const uid = useId();
+  const skyId = `sky-${uid}`;
+  const glowId = `glow-${uid}`;
+  const mood = MOOD[category];
+  return (
+    <svg
+      viewBox="0 0 210 280"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden="true"
+      className={className}
+    >
+      <defs>
+        <linearGradient id={skyId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={mood.skyTop} />
+          <stop offset="1" stopColor={mood.skyBottom} />
+        </linearGradient>
+        <radialGradient id={glowId} cx="0.7" cy="0.28" r="0.6">
+          <stop offset="0" stopColor={mood.glow} stopOpacity="0.9" />
+          <stop offset="1" stopColor={mood.glow} stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <rect x="0" y="0" width="210" height="280" fill={`url(#${skyId})`} />
+      <rect x="0" y="0" width="210" height="280" fill={`url(#${glowId})`} />
+      {scene(category, mood.ink)}
+    </svg>
+  );
+}
+
 export function CategoryCard({
   category,
   selected,
@@ -165,42 +202,18 @@ export function CategoryCard({
   // When another card is selected in a single-select context, fade the rest.
   dimmed?: boolean;
 }) {
-  const uid = useId();
-  const skyId = `sky-${uid}`;
-  const glowId = `glow-${uid}`;
-  const mood = MOOD[category];
-
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={`group relative aspect-[3/4] w-full overflow-hidden rounded-2xl border-2 text-left shadow-sm transition duration-200 ${
+      className={`group relative aspect-[3/4] w-full overflow-hidden rounded-2xl border-2 text-left transition-[transform,box-shadow,border-color] duration-100 active:translate-y-1 active:shadow-none ${
         selected
-          ? "border-vermilion shadow-float"
-          : "border-transparent hover:-translate-y-0.5 hover:shadow-float"
+          ? "translate-y-1 border-vermilion shadow-[0_0_0_3px_rgb(var(--c-vermilion)/0.25)]"
+          : "border-[color:var(--line)] shadow-[0_4px_0_var(--line)] hover:border-vermilion/50"
       } ${dimmed && !selected ? "opacity-60 saturate-[0.8]" : ""}`}
     >
-      <svg
-        viewBox="0 0 210 280"
-        preserveAspectRatio="xMidYMid slice"
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full"
-      >
-        <defs>
-          <linearGradient id={skyId} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor={mood.skyTop} />
-            <stop offset="1" stopColor={mood.skyBottom} />
-          </linearGradient>
-          <radialGradient id={glowId} cx="0.7" cy="0.28" r="0.6">
-            <stop offset="0" stopColor={mood.glow} stopOpacity="0.9" />
-            <stop offset="1" stopColor={mood.glow} stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        <rect x="0" y="0" width="210" height="280" fill={`url(#${skyId})`} />
-        <rect x="0" y="0" width="210" height="280" fill={`url(#${glowId})`} />
-        {scene(category, mood.ink)}
-      </svg>
+      <CategoryArt category={category} className="absolute inset-0 h-full w-full" />
 
       {/* label scrim + label */}
       <span className="pointer-events-none absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/75 via-black/30 to-transparent" />

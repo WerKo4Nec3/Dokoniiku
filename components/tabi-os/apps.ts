@@ -48,6 +48,8 @@ export const TABI_APPS: TabiApp[] = [
   // Replaced by イベント; kept reachable for groups people already have.
   { id: "groups", href: "/groups", name: "グループ", icon: UsersRound, from: "#9aa0b8", to: "#5d6378", hidden: true },
   { id: "profile", href: "/profile", name: "タビ手帳", icon: CircleUserRound, from: "#f59bc2", to: "#c4466f", dock: true },
+  // Another traveller's profile (/u/<uid>), opened from なかま, rankings, events.
+  { id: "traveller", href: "/u", name: "旅人", icon: CircleUserRound, from: "#f59bc2", to: "#c4466f", hidden: true },
   { id: "wardrobe", href: "/wardrobe", name: "きせかえ", icon: Shirt, from: "#ffb39e", to: "#e3655f" },
   { id: "settings", href: "/settings", name: "設定", icon: Settings, from: "#a3acb6", to: "#5b6570" },
   { id: "admin", href: "/admin", name: "管理", icon: ShieldCheck, from: "#6f7d8c", to: "#2c3540", adminOnly: true, external: true },

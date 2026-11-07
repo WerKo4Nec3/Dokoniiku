@@ -1,7 +1,18 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Footprints, Loader2, MapPin, MapPinCheck, NotebookPen, Radar } from "lucide-react";
+import {
+  BookMarked,
+  Check,
+  Footprints,
+  Landmark,
+  Loader2,
+  MapPin,
+  MapPinCheck,
+  NotebookPen,
+  Radar,
+  Sparkles,
+} from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState, useSyncExternalStore } from "react";
 import { CabinetHeader } from "@/components/CabinetHeader";
@@ -11,6 +22,7 @@ import { DEFAULT_START } from "@/data/prefectures";
 import { TRAVEL_EVENTS } from "@/data/events";
 import {
   MAX_ACCURACY_M,
+  PLACE_RADIUS_KM,
   buildCandidates,
   locate,
   nearbyNotable,
@@ -126,13 +138,43 @@ export default function CheckInPage() {
         accent="vermilion"
       />
 
+      {!position && (
+        <div className="card-3d mt-6 rounded-[28px] bg-[color:var(--surface)] p-5">
+          <p className="text-sm font-black">チェックインって？</p>
+          <p className="mt-1.5 text-xs leading-5 text-[color:var(--muted)]">
+            旅先に着いたら、ここで現在地を確かめて「現地認証」のスタンプをもらおう。
+            本当にその場所にいるときだけ押せるよ。
+          </p>
+          <ul className="mt-4 space-y-2.5 text-xs font-bold">
+            <li className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-vermilion/10 text-vermilion">
+                <MapPin size={16} />
+              </span>
+              保存した旅の目的地・季節クエストの名所
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-forest/10 text-forest dark:text-forest-ink">
+                <Landmark size={16} />
+              </span>
+              {Math.round(PLACE_RADIUS_KM * 1000)}m以内の名所（神社・お寺・お城・公園など）
+            </li>
+            <li className="flex items-center gap-2.5">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-sun/20 text-[#8c6702] dark:text-sun">
+                <BookMarked size={16} />
+              </span>
+              スタンプは御朱印帳へ。XPと都道府県の制覇にもつながるよ
+            </li>
+          </ul>
+        </div>
+      )}
+
       {!loading && enabled && !user ? (
         <button type="button" onClick={openAuthDialog} className="scene-cta mt-6 w-full justify-center">
           ログインしてチェックイン
         </button>
       ) : (
         <>
-          <div className="mt-6 flex flex-col items-center rounded-[28px] border border-[color:var(--line)] bg-[color:var(--surface)] px-5 py-8">
+          <div className="card-3d mt-6 flex flex-col items-center rounded-[28px] bg-[color:var(--surface)] px-5 py-8">
             <div className="relative grid h-52 w-52 place-items-center">
               {[0, 1, 2].map((ring) => (
                 <motion.span
@@ -151,7 +193,7 @@ export default function CheckInPage() {
                 onClick={() => void findMe()}
                 disabled={locating}
                 whileTap={{ scale: 0.95 }}
-                className="relative grid h-36 w-36 place-items-center rounded-full bg-vermilion text-white shadow-[0_16px_34px_-12px_rgb(var(--c-vermilion)/0.8)]"
+                className="relative grid h-36 w-36 place-items-center rounded-full bg-vermilion text-white shadow-[0_6px_0_color-mix(in_srgb,rgb(var(--c-vermilion))_68%,#000),0_16px_34px_-12px_rgb(var(--c-vermilion)/0.8)] transition-shadow active:shadow-none"
               >
                 <span className="flex flex-col items-center gap-1.5 text-sm font-bold tracking-[0.12em]">
                   {locating ? <Loader2 size={28} className="animate-spin" /> : <Radar size={30} />}
@@ -178,15 +220,16 @@ export default function CheckInPage() {
               <div>
                 <h2 className="text-sm font-black">ここにいる！</h2>
                 {candidates.here.length === 0 ? (
-                  <p className="mt-2 text-sm text-[color:var(--muted)]">
-                    近くにチェックインできる場所が見つかりませんでした。
+                  <p className="mt-2 text-sm leading-6 text-[color:var(--muted)]">
+                    すぐそばに、チェックインできる場所はないみたい。神社やお城、公園などに着いたら、
+                    もう一度さがしてね。
                   </p>
                 ) : (
                   <ul className="mt-3 space-y-2">
                     {candidates.here.map((candidate) => (
                       <li
                         key={candidate.key}
-                        className="flex items-center gap-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface)] p-3"
+                        className="card-3d flex items-center gap-3 rounded-2xl bg-[color:var(--surface)] p-3"
                       >
                         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-vermilion/10 text-vermilion">
                           <MapPin size={18} />
@@ -201,7 +244,7 @@ export default function CheckInPage() {
                           type="button"
                           onClick={() => void checkIn(candidate)}
                           disabled={!precise || candidate.doneToday || busyKey !== null}
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-vermilion px-4 py-2 text-xs font-bold text-white transition disabled:opacity-40"
+                          className="btn-3d btn-3d-sm shrink-0"
                         >
                           {busyKey === candidate.key ? (
                             <Loader2 size={14} className="animate-spin" />
@@ -220,7 +263,10 @@ export default function CheckInPage() {
 
               {candidates.near.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-black">もう少し</h2>
+                  <h2 className="flex items-center gap-1.5 text-sm font-black">
+                    <Sparkles size={14} className="text-vermilion" />
+                    もう少し歩けばチェックイン
+                  </h2>
                   <ul className="mt-3 space-y-2">
                     {candidates.near.map((candidate) => (
                       <li

@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { fixJourneyPhotos } from "@/lib/photos";
+import type { PublicStats } from "@/lib/publicStats";
 import type {
   FriendRequest,
   JourneyResult,
@@ -37,11 +38,21 @@ function makeFriendCode(): string {
 
 // ---- Public profile ----
 
+const STAT_KEYS = [
+  "prefectureIds",
+  "level",
+  "levelTitle",
+  "xp",
+  "medals",
+  "recentPlaces",
+] as const satisfies readonly (keyof PublicStats)[];
+
 // Make sure the signed-in user has a public profile with a friend code,
-// then keep its display fields in sync with the private tabibito profile.
+// then keep its display fields in sync with the private tabibito profile
+// (and, when given, the travel summary from lib/publicStats.ts).
 export async function ensurePublicProfile(
   uid: string,
-  base: TabibitoProfile & { visitedCount?: number },
+  base: TabibitoProfile & PublicStats,
 ): Promise<PublicProfile | null> {
   if (!db) return null;
   const ref = doc(db, "profiles", uid);
@@ -58,6 +69,12 @@ export async function ensurePublicProfile(
     avatarColor: base.avatarColor ?? existing?.avatarColor,
     visitedCount: base.visitedCount ?? existing?.visitedCount ?? 0,
   };
+  // Stats are only sent once the journeys have loaded; until then the
+  // published ones stay as they are.
+  for (const key of STAT_KEYS) {
+    const value = base[key] ?? existing?.[key];
+    if (value !== undefined) Object.assign(next, { [key]: value });
+  }
   await setDoc(ref, { ...next, updatedAt: serverTimestamp() }, { merge: true });
   return next;
 }
@@ -152,6 +169,21 @@ export async function listFriendProfiles(
     otherIds.map((otherUid) => getPublicProfile(otherUid).catch(() => null)),
   );
   return profiles.filter((value): value is PublicProfile => Boolean(value));
+}
+
+export async function isFriendWith(myUid: string, otherUid: string): Promise<boolean> {
+  if (!db) return false;
+  // Reading someone else's friendship is denied, which also means "no".
+  const snapshot = await getDoc(doc(db, "friendships", friendshipIdFor(myUid, otherUid))).catch(
+    () => null,
+  );
+  return Boolean(snapshot?.exists());
+}
+
+export async function hasSentFriendRequest(fromUid: string, toUid: string): Promise<boolean> {
+  if (!db) return false;
+  const snapshot = await getDoc(doc(db, "friendRequests", `${fromUid}_${toUid}`)).catch(() => null);
+  return Boolean(snapshot?.exists());
 }
 
 export async function removeFriend(myUid: string, otherUid: string) {

@@ -88,7 +88,7 @@ export function FoodCard({
   const searchNear = (word: string) =>
     `https://www.google.com/maps/search/${encodeURIComponent(word)}/@${latitude},${longitude},16z`;
   return (
-    <section className={`rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5 ${className}`}>
+    <section className={`card-3d rounded-[24px] bg-[color:var(--surface)] p-5 ${className}`}>
       <h3 className="flex items-center gap-2 text-sm font-black">
         <Utensils size={16} className="text-vermilion" /> 近くのごはん・カフェ
       </h3>

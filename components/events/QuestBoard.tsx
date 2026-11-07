@@ -67,7 +67,7 @@ function SpotImage({ spot }: { spot: EventSpot }) {
   useEffect(() => {
     if (spot.image) return;
     let active = true;
-    void searchCommonsPhotos(spot.name, 1).then((urls) => {
+    void searchCommonsPhotos(spot.name, 1, spot.name).then((urls) => {
       if (active && urls[0]) setFound(urls[0]);
     });
     return () => {

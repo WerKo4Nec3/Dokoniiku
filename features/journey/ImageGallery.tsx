@@ -1,22 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { normalizePhotoUrl } from "@/lib/photos";
 
 // A hero image with a thumbnail strip underneath. Tapping a thumbnail swaps
 // the large image. Every photo is pre-checked: ones that fail to load (dead
 // link, hotlink block, rejected thumbnail size…) are dropped instead of
-// showing up as black tiles. Falls back to the brand backdrop when none work.
+// showing up as black tiles. Falls back to `fallback` (or the brand
+// backdrop) when none work.
 export function ImageGallery({
   images,
   alt,
   className = "",
   frameClass = "",
+  fallback,
 }: {
   images: string[];
   alt: string;
   className?: string;
   frameClass?: string;
+  // Shown in the frame when there is no usable photo.
+  fallback?: ReactNode;
 }) {
   const sources = useMemo(
     () => [...new Set(images.map((u) => normalizePhotoUrl(u)).filter(Boolean))],
@@ -54,6 +58,19 @@ export function ImageGallery({
   }, [sources]);
 
   const usable = sources.filter((src) => !failed.has(src));
+  if (!usable.length && fallback) {
+    return (
+      <div className={className}>
+        <div
+          className={`relative h-60 overflow-hidden rounded-[28px] sm:h-80 ${frameClass}`}
+          role="img"
+          aria-label={alt}
+        >
+          {fallback}
+        </div>
+      </div>
+    );
+  }
   const gallery = usable.length ? usable : ["/travel-backdrop.jpg"];
   const current =
     activeSrc && gallery.includes(activeSrc) ? activeSrc : gallery[0];

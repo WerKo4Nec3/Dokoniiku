@@ -71,6 +71,8 @@ The journey result links out to Google Maps with the destination's coordinates r
 
 `getAttractionsByPrefecture()` queries Wikipedia's geosearch API (`ja.wikipedia.org/w/api.php?list=geosearch`) around the selected prefecture's coordinates, then filters the results with title-based heuristics to keep likely sightseeing spots (castles, shrines, temples, gardens, museums, viewpoints...) and drop generic entries (offices, hospitals, stations...). `getDestinationSummary()` then fetches a real Japanese-language description and photo for the chosen destination from Wikipedia's page-summary REST API (`ja.wikipedia.org/api/rest_v1/page/summary`), replacing the templated description when an article is found. `getWeatherByCoordinates()` loads current weather for the chosen destination from OpenWeather.
 
+Wikipedia's category trees cross prefecture borders (a prefecture's 自然景勝地 can lead to 瀬戸内海国立公園 and from there to Kobe or Kagawa), so every place found is checked against the prefecture's outline in `public/data/areas.json` — built by `scripts/build-areas.mjs` from Natural Earth's public-domain 1:10m admin-1 boundaries — and dropped when it lies elsewhere.
+
 Wikipedia's APIs are free, keyless, and CORS-enabled, so attraction search and description enrichment work entirely client-side without any configuration. All providers return a common `SearchProviderResult<T>` with `live` or `mock` status — network failures, empty results, and API errors automatically fall back to local demo data instead of breaking the journey.
 
 ## Estimation Logic

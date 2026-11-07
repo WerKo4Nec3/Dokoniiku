@@ -55,7 +55,7 @@ const AreaMap = dynamic(() => import("@/components/travel/AreaMap"), {
 
 const aiEnabled = process.env.NEXT_PUBLIC_GEMINI_ENABLED === "true";
 const STEPS = ["出発", "移動中", "到着", "散策", "完了"] as const;
-const card = "rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)] p-5";
+const card = "card-3d rounded-[24px] bg-[color:var(--surface)] p-5";
 const clock = (iso: string) => {
   const d = new Date(iso);
   return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
@@ -481,7 +481,7 @@ export default function TravelPage() {
                     </span>
                   </div>
                 </div>
-                <div className="overflow-hidden rounded-[24px] border border-[color:var(--line)] bg-[color:var(--surface)]">
+                <div className="overflow-hidden card-3d rounded-[24px] bg-[color:var(--surface)]">
                   <TripRecordForm trip={trip} onFinish={endAfterRecord} finishLabel="旅を終える" />
                 </div>
                 <PlaceRating placeId={journey.destination.id} name={journey.destination.name} prefecture={journey.prefecture.nameJa} />
