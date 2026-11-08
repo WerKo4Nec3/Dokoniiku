@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Car, ExternalLink, Footprints, TrainFront } from "lucide-react";
+import { Car, Clock, Footprints, TrainFront } from "lucide-react";
 import { fetchAround } from "@/lib/api/around";
 
 // 「アクセス」: the nearest station (from the same cached OSM lookup the nearby
@@ -60,8 +60,8 @@ export function AccessCard({
       ? `https://transit.yahoo.co.jp/search/result?from=${encodeURIComponent(fromStation)}&to=${encodeURIComponent(toStation)}`
       : null;
 
-  const btn =
-    "inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-[color:var(--line)] px-3 py-2.5 text-xs font-black transition hover:border-vermilion/50 hover:text-vermilion";
+  // Symbols only (the words wrapped on phones); the name is in the label.
+  const btn = "btn-3d btn-3d-plain w-full px-0";
 
   return (
     <div
@@ -82,16 +82,37 @@ export function AccessCard({
           実際の経路と時刻はこちらで確認できます。
         </p>
       )}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <a href={gmaps("transit")} target="_blank" rel="noreferrer" className={btn}>
-          <TrainFront size={14} /> 電車で行く
+      <div className={`mt-4 grid gap-3 ${yahoo ? "grid-cols-3" : "grid-cols-2"}`}>
+        <a
+          href={gmaps("transit")}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="電車で行く（Google マップ）"
+          title="電車で行く"
+          className={btn}
+        >
+          <TrainFront size={24} className="text-forest-ink" />
         </a>
-        <a href={gmaps("driving")} target="_blank" rel="noreferrer" className={btn}>
-          <Car size={14} /> 車で行く
+        <a
+          href={gmaps("driving")}
+          target="_blank"
+          rel="noreferrer"
+          aria-label="車で行く（Google マップ）"
+          title="車で行く"
+          className={btn}
+        >
+          <Car size={24} className="text-sky" />
         </a>
         {yahoo && (
-          <a href={yahoo} target="_blank" rel="noreferrer" className={btn}>
-            乗換案内 <ExternalLink size={12} />
+          <a
+            href={yahoo}
+            target="_blank"
+            rel="noreferrer"
+            aria-label="乗換案内（Yahoo!）"
+            title="乗換案内"
+            className={btn}
+          >
+            <Clock size={24} className="text-vermilion" />
           </a>
         )}
       </div>

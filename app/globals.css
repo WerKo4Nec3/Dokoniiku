@@ -668,16 +668,35 @@ html[data-scene-ink="light"]:not(.dark) .scene-copy {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
   border-color: rgb(255 255 255 / 0.08);
 }
-/* Phones: a lighter blur over the animated scene keeps scrolling and the
-   genre panel smooth; the denser tint keeps the text just as readable. */
+/* Phones: no blur at all. The scene behind never stops moving (clouds,
+   birds, leaves), so a blurred panel is re-blurred on every frame, which
+   made scrolling and the genre panel stutter; a near-solid tint reads the
+   same. */
 @media (max-width: 640px) {
   .scene-glass {
-    background: color-mix(in srgb, var(--surface) 88%, transparent);
-    -webkit-backdrop-filter: blur(8px);
-    backdrop-filter: blur(8px);
+    background: color-mix(in srgb, var(--surface) 93%, transparent);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   .dark .scene-glass {
-    background: color-mix(in srgb, var(--surface) 85%, transparent);
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+  }
+}
+
+/* Panels that open in place: a short fade and slide, compositor-only. It
+   replays whenever the panel is shown again. */
+.panel-in {
+  animation: panel-in 0.16s ease-out;
+}
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-in {
+    animation: none;
   }
 }
 

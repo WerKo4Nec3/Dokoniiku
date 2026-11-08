@@ -73,6 +73,29 @@ const deepWikiRoots: Record<DestinationCategory, string[]> = {
   viewpoint: ["自然景勝地", "山"],
 };
 
+// deepcat trees wander far from their genre: 大阪府の公園 → 扇町公園 →
+// the children's museum and the TV station that stand in that park;
+// 兵庫県の城 → 姫路城 → Himeji's stations, schools and department stores.
+// A place found only through a tree must therefore carry its genre in its
+// name (food is exempt: sake brewers go by brand names).
+const NATURE_NAME =
+  /公園|庭園|緑地|森|山|岳|峠|峰|峯|嶺|池|沼|川|滝|渓|峡|谷|湖|海岸|浜|岬|崎|浦|島|高原|湿原|原$|自然|園$|林|丘|湾|潟|洞|岩|ヶ|平$|台$|樹|クス|ケヤキ|ソテツ|杉|桜|松|梅|ビーチ|海水浴場/;
+const genreName: Record<DestinationCategory, RegExp> = {
+  nature: NATURE_NAME,
+  viewpoint: new RegExp(`${NATURE_NAME.source}|嶽|台|展望|タワー|塔|灯台|ダム|景|渦潮`),
+  history: /城|館|陣屋|砦|台場|跡|遺跡|古墳|陵|墓|塚|住宅|家$|邸|屋敷|宿|関所|街道|町並|門|櫓|蔵/,
+  shrine: /神社|宮|大社|社$|稲荷|天満|八幡|権現|王子|明神|大神|寺|院|堂|庵|坊|廟|観音|聖天|不動|地蔵|薬師|文殊/,
+  museum: /館|ミュージアム|みゅーじあむ|ギャラリー|記念|資料|美術|博物|科学|ワールド|プラザ|センター|パビリオン|動物園|植物園/,
+  "hot-spring": /温泉|湯|泉|スパ/,
+  food: /./,
+};
+// Buildings named after where they stand (中之島図書館, 自然史博物館) are
+// not nature or a view, whatever their name says.
+const buildingName = /館$|館 \(|図書館|公会堂|ビル$|センター$/;
+// ...and never be one of these, whatever the tree.
+const notAPlaceName =
+  /戦い|合戦|事件|事故|療養所|駅$|駅 \(|線$|学校|大学|学院|病院|刑務所|百貨店|ホテル|放送|アパート|株式会社|銀行|役所|役場|警察|消防|バス$|鉄道|ケーブル|ロープウェイ|港$|スタジアム|競技場|球技場|球場|体育館|アリーナ|ホール$|プール$/;
+
 const allGenres = Object.keys(categoryWikiWords) as DestinationCategory[];
 
 // Live results per prefecture + genre (+ reach), so re-rolls don't refetch;
@@ -103,7 +126,8 @@ function mapCategoryFromTitle(title: string): DestinationCategory[] {
   if (/美術館|博物館|資料館|記念館/.test(title)) result.push("museum");
   if (/温泉/.test(title)) result.push("hot-spring");
   if (/市場|名物|グルメ/.test(title)) result.push("food");
-  if (/展望|タワー|灯台|橋/.test(title)) result.push("viewpoint");
+  // A bridge only when the name ends in one (not 京橋花月, a theatre).
+  if (/展望|タワー|灯台|橋$/.test(title)) result.push("viewpoint");
   return result.length ? result.slice(0, 3) : ["history"];
 }
 
@@ -277,11 +301,25 @@ async function searchCategoryPlaces(
   }
   deep.forEach((pages, index) => {
     const genre = roots[index].genre;
-    for (const [pageid, hit] of pages) add(pageid, hit, genre ? [genre] : []);
+    for (const [pageid, hit] of pages) {
+      if (!genre) add(pageid, hit, []);
+      else if (
+        genreName[genre].test(hit.title) &&
+        !notAPlaceName.test(hit.title) &&
+        !((genre === "nature" || genre === "viewpoint") && buildingName.test(hit.title))
+      ) {
+        add(pageid, hit, [genre]);
+      }
+    }
   });
 
   return [...found.entries()]
-    .filter(([, { hit }]) => hit.title.trim() && !adminAreaPattern.test(hit.title))
+    // Registered cultural properties include school, station and hotel
+    // buildings; they are not somewhere to go for the weekend.
+    .filter(
+      ([, { hit }]) =>
+        hit.title.trim() && !adminAreaPattern.test(hit.title) && !notAPlaceName.test(hit.title),
+    )
     .map(([pageid, { hit, genres: genresOfHit }]) => ({
       id: `wiki-${pageid}`,
       name: hit.title,

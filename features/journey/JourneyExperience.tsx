@@ -44,7 +44,7 @@ import {
   createLucideIcon,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { DEFAULT_START, prefectures } from "@/data/prefectures";
 import { startPointPresets } from "@/data/startPoints";
 import { useAuth } from "@/lib/auth/AuthProvider";
@@ -134,11 +134,8 @@ import {
   DifficultyBadge,
   difficultyFrameClass,
 } from "@/components/DifficultyBadge";
-import {
-  CATEGORY_ORDER,
-  CategoryArt,
-  CategoryCard,
-} from "@/components/journey/CategoryCard";
+import { CategoryArt } from "@/components/journey/CategoryCard";
+import { GenreFilter } from "@/components/journey/GenreFilter";
 import { TabiMascot } from "@/features/mascot/TabiMascot";
 import { TabiSprite } from "@/features/mascot/TabiSprite";
 import { SceneBackdrop, type ScenePhase } from "@/features/scene/SceneBackdrop";
@@ -277,9 +274,10 @@ const heroItem = {
   },
 };
 
-// Shows/hides togglable panels. Only opacity and a small slide are animated:
-// growing the height frame by frame re-laid out the page and re-blurred the
-// frosted panel behind it on every frame, which stuttered on phones.
+// Shows/hides togglable panels: fades in with CSS (opacity and a small
+// slide, see .panel-in), closes at once. Animating the height re-laid out the
+// page every frame, and an exit fade left a blank frosted card for a moment
+// before the page jumped.
 function ExpandPanel({
   open,
   className,
@@ -289,21 +287,7 @@ function ExpandPanel({
   className?: string;
   children: React.ReactNode;
 }) {
-  return (
-    <AnimatePresence initial={false}>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, transition: { duration: 0.1 } }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
-          className={`w-full ${className ?? ""}`}
-        >
-          {children}
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
+  return open ? <div className={`panel-in w-full ${className ?? ""}`}>{children}</div> : null;
 }
 
 // Fill percent (0..100) for a .range-brand slider's --fill.
@@ -460,7 +444,8 @@ export function JourneyExperience() {
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  const [filtersOpen, setFiltersOpen] = useState(false);
+  // Bumped to open the genre panel (it keeps its own open state).
+  const [filterOpenRequest, setFilterOpenRequest] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
   const [scope, setScope] = useState<"nearby" | "all">("nearby");
@@ -719,17 +704,17 @@ export function JourneyExperience() {
     );
   }
 
-  function toggleCategory(category: DestinationCategory) {
+  // Stable, so the memoised genre panel only re-renders when its own
+  // props change.
+  const toggleCategory = useCallback((category: DestinationCategory) => {
     setSelectedCategories((current) =>
       current.includes(category)
         ? current.filter((item) => item !== category)
         : [...current, category],
     );
-  }
+  }, []);
 
-  function resetFilters() {
-    setSelectedCategories([]);
-  }
+  const resetFilters = useCallback(() => setSelectedCategories([]), []);
 
   function toggleTransport(mode: TransportMode) {
     setTransports((current) =>
@@ -950,7 +935,7 @@ export function JourneyExperience() {
           ? `片道 約${reach}km以内の${prefecture.nameJa}には、${genre}が見つかりませんでした。${selectedCategories.length ? "ジャンルを変えるか、" : ""}行ける範囲の都道府県で探してみてね。`
           : "選んだジャンルに合う場所が見つかりませんでした。ジャンルを変えるか、メインに戻って別の方角を試してみてね。",
       );
-      if (selectedCategories.length) setFiltersOpen(true);
+      if (selectedCategories.length) setFilterOpenRequest((count) => count + 1);
       setStage("prefecture");
       return null;
     }
@@ -1360,7 +1345,6 @@ export function JourneyExperience() {
     }
   }
 
-  const filtersActive = selectedCategories.length > 0;
   // After a miss, re-check the places we already fetched as settings change.
   // Only trustworthy if the cached search covered the current reach.
   const liveMatches =
@@ -1370,61 +1354,6 @@ export function JourneyExperience() {
     candidateCache.radiusKm >= (nearFilter?.radiusKm ?? Infinity)
       ? feasiblePlans(candidateCache.candidates).length
       : null;
-
-  const filterPanel = (
-    <div className="mt-6 border-t border-[color:var(--line)] pt-6">
-      <button
-        type="button"
-        onClick={() => setFiltersOpen((open) => !open)}
-        aria-expanded={filtersOpen}
-        className="btn-3d btn-3d-plain btn-3d-sm"
-      >
-        <SlidersHorizontal size={14} />
-        ジャンルで絞る（任意）
-        {filtersActive && (
-          <span className="rounded-full bg-vermilion px-1.5 py-0.5 text-[10px] font-black text-white">
-            {selectedCategories.length}件
-          </span>
-        )}
-      </button>
-
-      <ExpandPanel open={filtersOpen}>
-        <div className="mt-3 rounded-2xl border border-[color:var(--line)] bg-[color:var(--surface-muted)] p-5">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <p className="text-sm font-bold text-[color:var(--foreground)]">
-                気になるジャンル
-              </p>
-              <p className="mt-0.5 text-xs font-medium text-[color:var(--muted)]">
-                複数選択できます・未選択ならタビにおまかせ
-              </p>
-            </div>
-            {filtersActive && (
-              <button
-                type="button"
-                onClick={resetFilters}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold text-[color:var(--muted)] transition hover:bg-[color:var(--surface)] hover:text-[color:var(--foreground)]"
-              >
-                <RotateCcw size={12} />
-                クリア
-              </button>
-            )}
-          </div>
-
-          <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {CATEGORY_ORDER.map((category) => (
-              <CategoryCard
-                key={category}
-                category={category}
-                selected={selectedCategories.includes(category)}
-                onClick={() => toggleCategory(category)}
-              />
-            ))}
-          </div>
-        </div>
-      </ExpandPanel>
-    </div>
-  );
 
   // Budget / time / distance / transport knobs. Shared between the mode page
   // and the "loosen your settings" panel on the prefecture stage — where the
@@ -2096,7 +2025,12 @@ export function JourneyExperience() {
                   </p>
                 </div>
 
-                {filterPanel}
+                <GenreFilter
+                  selected={selectedCategories}
+                  onToggle={toggleCategory}
+                  onReset={resetFilters}
+                  openRequest={filterOpenRequest}
+                />
 
                 {filterNotice && liveMatches !== null && liveMatches > 0 ? (
                   <div className="mt-5 flex items-start gap-2 rounded-2xl border border-forest/40 bg-forest/10 px-4 py-3 text-xs font-bold leading-5 text-forest dark:text-forest-ink">
