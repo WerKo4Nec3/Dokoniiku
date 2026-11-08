@@ -42,6 +42,7 @@ if (firebaseEnabled) {
   }
 }
 
+export const firebaseApp = app;
 export const auth = authInstance;
 export const db = dbInstance;
 export const googleProvider = new GoogleAuthProvider();

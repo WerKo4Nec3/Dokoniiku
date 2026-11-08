@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "firebase": "^12.15.0",
+    "firebase-admin": "^13.10.0",
     "framer-motion": "^12.23.12",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.468.0",

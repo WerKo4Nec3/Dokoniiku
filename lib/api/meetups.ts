@@ -18,6 +18,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { notify } from "@/lib/push";
 import type { GroupMessage, Meetup, MeetupPerson } from "@/types";
 
 // イベント: a trip one traveller hosts and others join — by request (the
@@ -68,6 +69,8 @@ export async function createMeetup(
     people,
     createdAt: serverTimestamp(),
   });
+  const invited = invitees.map((invitee) => invitee.uid).filter((uid) => uid !== host.uid);
+  if (invited.length) notify({ kind: "invite", meetupId: ref.id, uids: invited });
   return ref.id;
 }
 
@@ -119,6 +122,7 @@ export const listRequestedMeetups = (uid: string) => listWhere("pending", "array
 export async function requestToJoin(id: string, uid: string, person: MeetupPerson) {
   if (!db) return;
   await updateDoc(doc(db, "meetups", id), { pending: arrayUnion(uid), [`people.${uid}`]: person });
+  notify({ kind: "request", meetupId: id });
 }
 
 export async function withdrawRequest(id: string, uid: string) {
@@ -156,6 +160,7 @@ export async function leaveMeetup(id: string, uid: string) {
 export async function approveRequest(id: string, uid: string) {
   if (!db) return;
   await updateDoc(doc(db, "meetups", id), { pending: arrayRemove(uid), members: arrayUnion(uid) });
+  notify({ kind: "approved", meetupId: id, uids: [uid] });
 }
 
 export async function rejectRequest(id: string, uid: string) {
@@ -174,6 +179,7 @@ export async function inviteToMeetup(id: string, invitees: { uid: string; person
   const patch: Record<string, unknown> = { invites: arrayUnion(...invitees.map((invitee) => invitee.uid)) };
   for (const invitee of invitees) patch[`people.${invitee.uid}`] = invitee.person;
   await updateDoc(doc(db, "meetups", id), patch);
+  notify({ kind: "invite", meetupId: id, uids: invitees.map((invitee) => invitee.uid) });
 }
 
 // ---- Chat (members only) ----
@@ -206,4 +212,5 @@ export async function sendMeetupMessage(id: string, uid: string, name: string, t
     text,
     createdAt: serverTimestamp(),
   });
+  notify({ kind: "message", meetupId: id });
 }

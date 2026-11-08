@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Bell } from "lucide-react";
 import { markInboxSeen, useInbox } from "@/lib/inbox";
 import { InboxIcon } from "@/components/inbox/InboxIcon";
+import { PushToggle } from "@/components/inbox/PushToggle";
 
 function ago(at: number, now: number): string {
   const minutes = Math.floor((now - at) / 60_000);
@@ -69,6 +70,9 @@ export function InboxBell() {
             className="panel-in fixed inset-x-3 top-[4.25rem] z-10 max-h-[70svh] overflow-y-auto overscroll-contain rounded-[22px] border-2 border-[color:var(--line)] bg-[color:var(--surface)] p-2 shadow-float sm:absolute sm:inset-x-auto sm:right-0 sm:top-12 sm:w-96"
           >
             <p className="px-3 pb-1 pt-2 text-xs font-black tracking-[0.18em] text-[color:var(--muted)]">お知らせ</p>
+            <div className="px-1 pb-1 pt-1 empty:hidden">
+              <PushToggle />
+            </div>
             {inbox.items.length === 0 ? (
               <p className="px-3 py-8 text-center text-sm font-bold text-[color:var(--muted)]">
                 新しいお知らせはありません

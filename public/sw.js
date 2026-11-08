@@ -1,5 +1,5 @@
 // Bump on every change to this file: activation deletes older caches.
-const CACHE_NAME = "tabi-compass-v7";
+const CACHE_NAME = "tabi-compass-v8";
 const OFFLINE_URL = "/offline";
 const APP_SHELL = [OFFLINE_URL, "/icon-192.png"];
 
@@ -76,4 +76,60 @@ self.addEventListener("fetch", (event) => {
       }),
     );
   }
+});
+
+// ---- Push notifications (sent by /api/notify through Firebase Cloud Messaging) ----
+
+// Safari (iPhone/iPad home-screen apps) drops the subscription if a push
+// shows nothing, so there every push is shown.
+const mustShowEveryPush = (() => {
+  const ua = self.navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Safari\//.test(ua) && !/Chrome|Chromium|Edg|Firefox/.test(ua));
+})();
+
+self.addEventListener("push", (event) => {
+  let message = {};
+  try {
+    message = event.data ? event.data.json() : {};
+  } catch {
+    message = {};
+  }
+  // FCM wraps what we sent in { data } (or { notification }).
+  const data = { ...(message.notification || {}), ...(message.data || {}) };
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      // The app is open in front of you: its own お知らせ pop-up shows it.
+      if (!mustShowEveryPush && !data.always && windows.some((client) => client.focused)) return;
+      await self.registration.showNotification(data.title || "旅コンパス", {
+        body: data.body || "",
+        icon: "/icon-192.png",
+        tag: data.tag || undefined,
+        renotify: Boolean(data.tag),
+        data: { url: data.url || "/" },
+      });
+    })(),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL((event.notification.data && event.notification.data.url) || "/", self.location.origin);
+  event.waitUntil(
+    (async () => {
+      const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      const exact = windows.find((client) => new URL(client.url).pathname === target.pathname);
+      if (exact) return exact.focus();
+      const open = windows.find((client) => "navigate" in client);
+      if (open) {
+        try {
+          const moved = await open.navigate(target.href);
+          if (moved) return moved.focus();
+        } catch {
+          // Not controlled by this worker yet: open a new window instead.
+        }
+      }
+      return self.clients.openWindow(target.href);
+    })(),
+  );
 });

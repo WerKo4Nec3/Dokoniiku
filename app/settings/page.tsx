@@ -3,6 +3,7 @@
 import { Check, Heart, Monitor, Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 import { CabinetHeader } from "@/components/CabinetHeader";
+import { PushToggle } from "@/components/inbox/PushToggle";
 import { syncThemeColor } from "@/lib/themeColor";
 import { categoryLabels } from "@/lib/utils/travel";
 import {
@@ -201,6 +202,8 @@ export default function SettingsPage() {
             好みを{preferred.length ? "変更" : "設定"}する
           </button>
         </div>
+
+        <PushToggle card />
       </div>
     </section>
   );

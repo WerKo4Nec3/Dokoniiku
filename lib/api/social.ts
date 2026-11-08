@@ -12,6 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { notify } from "@/lib/push";
 import { fixJourneyPhotos } from "@/lib/photos";
 import type { PublicStats } from "@/lib/publicStats";
 import type {
@@ -121,6 +122,7 @@ export async function sendFriendRequest(
     fromName: fromName ?? null,
     createdAt: serverTimestamp(),
   });
+  notify({ kind: "friend", uids: [toUid] });
 }
 
 export async function listIncomingRequests(
@@ -214,6 +216,7 @@ export async function shareCardWithFriend(
     journey,
     createdAt: serverTimestamp(),
   });
+  notify({ kind: "share", cardId: `${journey.id}_${toUid}` });
 }
 
 export async function listSharedInbox(uid: string): Promise<SharedCard[]> {

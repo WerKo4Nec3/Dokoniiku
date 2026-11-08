@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { markInboxSeen, startInbox, useInbox, type InboxItem } from "@/lib/inbox";
+import { refreshPush } from "@/lib/push";
 import { InboxIcon } from "@/components/inbox/InboxIcon";
 
 // Runs the お知らせ for the signed-in traveller (mounted once in the
@@ -17,6 +18,7 @@ export function InboxEngine() {
 
   useEffect(() => {
     if (!uid) return;
+    void refreshPush(uid).catch(() => undefined);
     return startInbox(uid);
   }, [uid]);
 

@@ -9,3 +9,7 @@ qa-*.png
 desktop.png
 mobile.png
 .DS_Store
+
+# Firebase service-account keys: secret, never commit
+*firebase-adminsdk*.json
+firebase-service-account.json

@@ -19,6 +19,7 @@ import {
 } from "firebase/auth";
 import { auth, firebaseEnabled, googleProvider } from "@/lib/firebase";
 import { touchUser } from "@/lib/analytics";
+import { disablePush } from "@/lib/push";
 
 type AuthState = {
   user: User | null;
@@ -90,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOutUser() {
     if (!auth) return;
+    // This device stops receiving the account's push notifications.
+    if (auth.currentUser) await disablePush(auth.currentUser.uid).catch(() => undefined);
     await signOut(auth);
   }
 
