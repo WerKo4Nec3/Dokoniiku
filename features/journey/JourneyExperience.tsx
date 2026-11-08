@@ -444,7 +444,7 @@ export function JourneyExperience() {
   const [startPickerOpen, setStartPickerOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState<string | null>(null);
-  // Bumped to open the genre panel (it keeps its own open state).
+  // Bumped to open the genre sheet (it keeps its own open state).
   const [filterOpenRequest, setFilterOpenRequest] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedCategories, setSelectedCategories] = useState<DestinationCategory[]>([]);
@@ -704,17 +704,12 @@ export function JourneyExperience() {
     );
   }
 
-  // Stable, so the memoised genre panel only re-renders when its own
-  // props change.
-  const toggleCategory = useCallback((category: DestinationCategory) => {
-    setSelectedCategories((current) =>
-      current.includes(category)
-        ? current.filter((item) => item !== category)
-        : [...current, category],
-    );
-  }, []);
-
-  const resetFilters = useCallback(() => setSelectedCategories([]), []);
+  // Stable, so the memoised genre sheet only re-renders when its own props
+  // change.
+  const applyCategories = useCallback(
+    (next: DestinationCategory[]) => setSelectedCategories(next),
+    [],
+  );
 
   function toggleTransport(mode: TransportMode) {
     setTransports((current) =>
@@ -2027,8 +2022,7 @@ export function JourneyExperience() {
 
                 <GenreFilter
                   selected={selectedCategories}
-                  onToggle={toggleCategory}
-                  onReset={resetFilters}
+                  onApply={applyCategories}
                   openRequest={filterOpenRequest}
                 />
 
