@@ -10,19 +10,38 @@ const SIZES = {
 } as const;
 
 // A かぜOS app tile: gradient squircle with a soft top gloss.
-export function AppIcon({ app, size = "md" }: { app: TabiApp; size?: keyof typeof SIZES }) {
+// `badge`: unseen お知らせ for this app, shown as a red count.
+export function AppIcon({
+  app,
+  size = "md",
+  badge = 0,
+}: {
+  app: TabiApp;
+  size?: keyof typeof SIZES;
+  badge?: number;
+}) {
   const Icon = app.icon;
   const s = SIZES[size];
   return (
-    <span
-      className={`relative grid shrink-0 place-items-center overflow-hidden text-white shadow-[0_6px_14px_-6px_rgb(0_0_0_/_0.45)] ${s.box}`}
-      style={{ background: `linear-gradient(150deg, ${app.from}, ${app.to})` }}
-    >
+    <span className="relative inline-grid shrink-0">
       <span
-        aria-hidden
-        className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent"
-      />
-      <Icon size={s.icon} strokeWidth={2.2} className="relative drop-shadow-sm" />
+        className={`relative grid shrink-0 place-items-center overflow-hidden text-white shadow-[0_6px_14px_-6px_rgb(0_0_0_/_0.45)] ${s.box}`}
+        style={{ background: `linear-gradient(150deg, ${app.from}, ${app.to})` }}
+      >
+        <span
+          aria-hidden
+          className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/30 to-transparent"
+        />
+        <Icon size={s.icon} strokeWidth={2.2} className="relative drop-shadow-sm" />
+      </span>
+      {badge > 0 && (
+        <span
+          aria-label={`新着${badge}件`}
+          className="absolute -right-1.5 -top-1.5 grid h-5 min-w-5 place-items-center rounded-full bg-vermilion px-1 text-[10px] font-black leading-none text-white ring-2 ring-[color:var(--surface)]"
+        >
+          {badge > 9 ? "9+" : badge}
+        </span>
+      )}
     </span>
   );
 }

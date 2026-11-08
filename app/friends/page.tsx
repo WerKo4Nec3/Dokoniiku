@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useOpenJourney, useUserJourneys } from "@/lib/hooks/cabinet";
+import { markInboxSeen, useInbox } from "@/lib/inbox";
 import { fetchProfile } from "@/lib/api/profile";
 import { saveJourneyForUser } from "@/lib/api/savedJourneys";
 import { publicStatsFor } from "@/lib/publicStats";
@@ -41,6 +42,12 @@ export default function FriendsPage() {
   }, [user]);
 
   const stats = useMemo(() => (journeys ? publicStatsFor(journeys) : null), [journeys]);
+
+  // Friend requests and shared places are listed here: they're read.
+  const inbox = useInbox();
+  useEffect(() => {
+    markInboxSeen((item) => item.kind === "friend" || item.kind === "share");
+  }, [inbox.items]);
 
   async function saveSharedJourney(journey: JourneyResult) {
     if (!user) return;

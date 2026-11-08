@@ -6,6 +6,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { useLiveShare } from "@/lib/live";
+import { useInbox, type InboxKind } from "@/lib/inbox";
 import { AppIcon, useClock } from "./AppIcon";
 import { OS_HOME, TABI_APPS, appForPath, isOSPath } from "./apps";
 
@@ -19,6 +20,7 @@ export function TabiOSFrame() {
   const clock = useClock();
   const sharing = useLiveShare();
   const reduce = useReducedMotion();
+  const badges = useAppBadges();
 
   const home = pathname === OS_HOME;
   const activeRef = useRef<HTMLAnchorElement>(null);
@@ -100,7 +102,7 @@ export function TabiOSFrame() {
                     aria-current={active ? "page" : undefined}
                     className="group relative shrink-0 transition-transform hover:-translate-y-1"
                   >
-                    <AppIcon app={item} size="sm" />
+                    <AppIcon app={item} size="sm" badge={badges[item.id]} />
                     <span className="pointer-events-none absolute -top-8 left-1/2 hidden -translate-x-1/2 whitespace-nowrap rounded-full bg-[color:var(--foreground)] px-2 py-0.5 text-[10px] font-bold text-[color:var(--background)] opacity-0 transition group-hover:opacity-100 md:block">
                       {item.name}
                     </span>
@@ -114,6 +116,20 @@ export function TabiOSFrame() {
       )}
     </>
   );
+}
+
+// Unseen お知らせ per app: event news on イベント, friend news on なかま.
+const APP_KINDS: Record<string, InboxKind[]> = {
+  meetups: ["invite", "request", "approved", "message"],
+  friends: ["friend", "share"],
+};
+export function useAppBadges(): Record<string, number> {
+  const inbox = useInbox();
+  const counts: Record<string, number> = {};
+  for (const [appId, kinds] of Object.entries(APP_KINDS)) {
+    counts[appId] = inbox.items.filter((item) => kinds.includes(item.kind) && !inbox.seen.has(item.id)).length;
+  }
+  return counts;
 }
 
 function DockDot({ reduce }: { reduce: boolean | null }) {

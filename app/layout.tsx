@@ -5,6 +5,7 @@ import { AppHeader } from "@/components/layout/AppHeader";
 import { TabiOSFrame } from "@/components/tabi-os/TabiOSFrame";
 import { ActiveTripBar } from "@/components/trip/ActiveTripBar";
 import { LiveShareEngine } from "@/components/live/LiveShareEngine";
+import { InboxEngine } from "@/components/inbox/InboxEngine";
 import { AchievementToaster } from "@/components/achievements/AchievementToaster";
 import { AuthDialog } from "@/components/AuthDialog";
 import { PreferencesDialog } from "@/components/PreferencesDialog";
@@ -87,6 +88,7 @@ export default function RootLayout({
           <main>{children}</main>
           <ActiveTripBar />
           <LiveShareEngine />
+          <InboxEngine />
           <AchievementToaster />
           <AuthDialog />
           <PreferencesDialog />

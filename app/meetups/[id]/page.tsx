@@ -47,6 +47,7 @@ import { coverCss } from "@/lib/groupCovers";
 import { GROUP_CATEGORIES } from "@/lib/groupCategories";
 import { isFull, isPast, mapsUrl, meetupWhen, personFrom, roleOf } from "@/lib/meetupFormat";
 import { displayPlaceName } from "@/lib/utils/travel";
+import { markChatRead, markInboxSeen, setActiveChat, useInbox } from "@/lib/inbox";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { PersonAvatar } from "@/components/meetups/MeetupCard";
 import { MeetupForm, type SavedPlace } from "@/components/meetups/MeetupForm";
@@ -116,6 +117,22 @@ export default function MeetupPage({ params }: { params: Promise<{ id: string }>
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
+
+  // While you're on this event its news is read: the chat (up to its
+  // latest message), the invite, join requests.
+  const inbox = useInbox();
+  useEffect(() => {
+    if (!going) return;
+    setActiveChat(id);
+    return () => setActiveChat(null);
+  }, [id, going]);
+  useEffect(() => {
+    const latest = messages.at(-1)?.createdAt?.toDate().getTime();
+    if (going && latest) markChatRead(id, latest);
+  }, [id, going, messages]);
+  useEffect(() => {
+    markInboxSeen((item) => item.meetupId === id);
+  }, [id, inbox.items]);
 
   const places = useMemo<SavedPlace[]>(() => {
     const seen = new Set<string>();

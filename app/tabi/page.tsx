@@ -6,6 +6,7 @@ import { ChevronRight, Footprints, Radio, Sparkles, Star } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { AppIcon, useClock, useToday } from "@/components/tabi-os/AppIcon";
 import { TABI_APPS } from "@/components/tabi-os/apps";
+import { useAppBadges } from "@/components/tabi-os/TabiOSFrame";
 import { openAuthDialog } from "@/components/AuthDialog";
 import { TRAVEL_EVENTS } from "@/data/events";
 import { TabiSprite } from "@/features/mascot/TabiSprite";
@@ -66,6 +67,7 @@ export default function TabiHome() {
   const [scene, setScene] = useState<Scene | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [now, setNow] = useState<number | null>(null);
+  const badges = useAppBadges();
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -258,7 +260,7 @@ export default function TabiHome() {
             <motion.div key={app.id} variants={item}>
               <Link href={app.href} className="group flex flex-col items-center gap-1.5">
                 <span className="transition group-hover:-translate-y-1 group-active:scale-95">
-                  <AppIcon app={app} />
+                  <AppIcon app={app} badge={badges[app.id]} />
                 </span>
                 <span className="rounded-md bg-[color:color-mix(in_srgb,var(--surface)_72%,transparent)] px-1.5 py-0.5 text-center text-[11px] font-bold text-[color:var(--foreground)] backdrop-blur-sm">
                   {app.name}

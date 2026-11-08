@@ -21,6 +21,7 @@ import { openAuthDialog } from "@/components/AuthDialog";
 import { syncThemeColor } from "@/lib/themeColor";
 import { trackVisit } from "@/lib/analytics";
 import { checkAdmin } from "@/lib/api/admin";
+import { InboxBell } from "@/components/inbox/InboxBell";
 
 const THEME_EVENT = "tabi-compass:theme-change";
 
@@ -103,6 +104,8 @@ export function AppHeader() {
               ログイン
             </button>
           )}
+
+          {enabled && user && <InboxBell />}
 
           {enabled && user && (
             <div className="relative">
