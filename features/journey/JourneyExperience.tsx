@@ -10,6 +10,7 @@ import {
   Bookmark,
   CalendarDays,
   Car,
+  CarTaxiFront,
   Check,
   Link2,
   Sunrise,
@@ -367,6 +368,41 @@ const transportIcons: Record<
   train: TrainFront,
   shinkansen: TrainFront,
 };
+
+// From the start to the place as a little route: start ─ 🚃 175km ─ 📍.
+function RouteLine({
+  from,
+  km,
+  transport,
+  label,
+}: {
+  from: string;
+  km: number;
+  transport: TransportMode;
+  // Spoken form ("電車＋タクシー"); a taxi leg also shows its icon.
+  label: string;
+}) {
+  const Icon = transportIcons[transport];
+  return (
+    <div
+      className="mt-2.5 flex items-center gap-1.5 text-xs font-black"
+      aria-label={`${from}から約${km}km・${label}`}
+    >
+      <span className="flex min-w-0 shrink items-center gap-1 text-forest-ink">
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full border-[2.5px] border-current" />
+        <span className="truncate">{from}</span>
+      </span>
+      <span className="h-[3px] min-w-3 flex-1 rounded-full bg-gradient-to-r from-forest/60 to-sun" />
+      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-sun/30 px-2 py-1 tabular-nums text-[color:var(--foreground)]">
+        <Icon size={13} strokeWidth={2.6} className="text-vermilion" />
+        {label.includes("タクシー") && <CarTaxiFront size={13} strokeWidth={2.6} className="text-vermilion" />}
+        {km}km
+      </span>
+      <span className="h-[3px] min-w-3 flex-1 rounded-full bg-gradient-to-r from-sun to-vermilion" />
+      <MapPin size={16} strokeWidth={2.6} className="shrink-0 fill-vermilion/25 text-vermilion" />
+    </div>
+  );
+}
 
 const BUDGET_MIN = 5000;
 // The budget slider is a party-total cap, so its ceiling scales with the
@@ -2187,13 +2223,15 @@ export function JourneyExperience() {
                     <h3 className="text-sm font-black leading-snug">
                       {plan.destination.name}
                     </h3>
-                    <p className="mt-1 text-xs font-bold text-[color:var(--muted)]">
-                      {start.name}から約{distanceKm}km ・{" "}
-                      {transportLabel(
+                    <RouteLine
+                      from={start.name}
+                      km={distanceKm}
+                      transport={plan.transport}
+                      label={transportLabel(
                         plan.transport,
                         journeyMode === "custom" ? allowTransfer : false,
                       )}
-                    </p>
+                    />
                     <div className="mt-2.5 flex flex-wrap gap-1.5">
                       {plan.destination.categories.slice(0, 2).map((category) => (
                         <span

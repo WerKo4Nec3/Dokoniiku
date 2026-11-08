@@ -291,21 +291,32 @@ export default function MeetupPage({ params }: { params: Promise<{ id: string }>
           {/* What you can do here */}
           <div className="mt-4 space-y-2">
             {role === "host" && (
-              <div className="flex flex-wrap gap-2">
+              // Symbols only (the words wrapped on phones); names in the labels.
+              <div className="grid grid-cols-2 gap-3">
                 <button
                   type="button"
                   onClick={() => setEditing(true)}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[color:var(--line)] px-4 py-3 text-sm font-black"
+                  aria-label="編集"
+                  title="編集"
+                  className="btn-3d btn-3d-plain w-full"
                 >
-                  <Pencil size={15} /> 編集
+                  <Pencil size={22} className="text-vermilion" />
                 </button>
                 <button
                   type="button"
                   onClick={copyLink}
-                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-[color:var(--line)] px-4 py-3 text-sm font-black"
+                  aria-label={copied ? "リンクをコピーしました" : "リンクをコピー"}
+                  title="リンクをコピー"
+                  className="btn-3d btn-3d-plain w-full"
                 >
-                  {copied ? <Check size={15} className="text-forest" /> : <Link2 size={15} />}
-                  {copied ? "コピーしました" : "リンクをコピー"}
+                  {copied ? (
+                    <Check size={22} strokeWidth={3} className="text-forest-ink" />
+                  ) : (
+                    <Link2 size={22} className="text-sky" />
+                  )}
+                  <span role="status" className="sr-only">
+                    {copied ? "コピーしました" : ""}
+                  </span>
                 </button>
               </div>
             )}
