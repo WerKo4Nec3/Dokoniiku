@@ -1,6 +1,7 @@
 import {
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -39,13 +40,16 @@ function makeFriendCode(): string {
 // ---- Public profile ----
 
 const STAT_KEYS = [
-  "prefectureIds",
+  "prefectureCount",
   "level",
   "levelTitle",
   "xp",
   "medals",
-  "recentPlaces",
 ] as const satisfies readonly (keyof PublicStats)[];
+
+// Briefly published (2026-11-08) and withdrawn: other travellers don't see
+// where you've been. Removed from the profile on every sync.
+const WITHDRAWN_KEYS = ["prefectureIds", "recentPlaces"] as const;
 
 // Make sure the signed-in user has a public profile with a friend code,
 // then keep its display fields in sync with the private tabibito profile
@@ -75,7 +79,8 @@ export async function ensurePublicProfile(
     const value = base[key] ?? existing?.[key];
     if (value !== undefined) Object.assign(next, { [key]: value });
   }
-  await setDoc(ref, { ...next, updatedAt: serverTimestamp() }, { merge: true });
+  const withdrawn = Object.fromEntries(WITHDRAWN_KEYS.map((key) => [key, deleteField()]));
+  await setDoc(ref, { ...next, ...withdrawn, updatedAt: serverTimestamp() }, { merge: true });
   return next;
 }
 

@@ -200,24 +200,13 @@ export type PublicProfile = TabibitoProfile & {
   // Short shareable code other travellers use to send a friend request.
   friendCode: string;
   visitedCount?: number;
-  // A summary of the owner's travels, published by their own app (journeys
-  // themselves stay private) — see lib/publicStats.ts.
-  prefectureIds?: string[];
+  // Numbers about the owner's travels, published by their own app. Where
+  // they've been is never published — see lib/publicStats.ts.
+  prefectureCount?: number;
   level?: number;
   levelTitle?: string;
   xp?: number;
   medals?: number;
-  recentPlaces?: PublicPlace[];
-};
-
-// A place someone has been to, as shown on their public profile.
-export type PublicPlace = {
-  name: string;
-  prefectureId: string;
-  category?: DestinationCategory;
-  imageUrl?: string;
-  // ISO date of the visit (or of the plan, for older records).
-  at?: string;
 };
 
 export type FriendRequest = {

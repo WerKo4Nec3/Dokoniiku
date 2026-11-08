@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useState } from "react";
-import { ArrowLeft, Check, Clock, Loader2, MapPin, UserPlus } from "lucide-react";
+import { ArrowLeft, Check, Clock, Loader2, UserPlus } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthProvider";
 import { fetchProfile } from "@/lib/api/profile";
 import {
@@ -12,28 +12,15 @@ import {
   isFriendWith,
   sendFriendRequest,
 } from "@/lib/api/social";
-import { prefectures } from "@/data/prefectures";
-import { normalizePhotoUrl } from "@/lib/photos";
-import { displayPlaceName } from "@/lib/utils/travel";
 import { openAuthDialog } from "@/components/AuthDialog";
-import { CategoryArt } from "@/components/journey/CategoryCard";
-import { ConquestMiniMap } from "@/components/profile/ConquestMiniMap";
 import { AVATAR_COLORS } from "@/components/profile/ProfileEditor";
 import type { PublicProfile } from "@/types";
 
 type Relation = "me" | "friend" | "sent" | "none";
 
-const prefectureName = (id: string) => prefectures.find((item) => item.id === id)?.nameJa ?? "";
-
-function visitLabel(iso?: string): string {
-  if (!iso) return "";
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
-}
-
-// Another traveller's タビ手帳, as far as they share it: name, level, how
-// much of Japan they've conquered and their latest places. Profiles are
-// readable by any signed-in traveller (firestore.rules: /profiles).
+// Another traveller's タビ手帳, as far as they share it: name, level and a
+// few numbers. Where they've been (places, prefectures) is never shown.
+// Profiles are readable by any signed-in traveller (firestore.rules: /profiles).
 export default function TravellerPage({ params }: { params: Promise<{ uid: string }> }) {
   const { uid } = use(params);
   const router = useRouter();
@@ -134,8 +121,6 @@ export default function TravellerPage({ params }: { params: Promise<{ uid: strin
 
   const color = person.avatarColor ?? AVATAR_COLORS[0];
   const name = person.displayName?.trim() || "名もなき旅人";
-  const conquered = person.prefectureIds ?? [];
-  const places = person.recentPlaces ?? [];
   const hasStats = person.level != null;
 
   const action =
@@ -195,7 +180,7 @@ export default function TravellerPage({ params }: { params: Promise<{ uid: strin
 
           <div className="mt-5 grid grid-cols-3 gap-2.5">
             {[
-              { emoji: "🗾", value: `${conquered.length}`, label: "都道府県" },
+              { emoji: "🗾", value: `${person.prefectureCount ?? 0}`, label: "都道府県" },
               { emoji: "📍", value: `${person.visitedCount ?? 0}`, label: "行った場所" },
               { emoji: "🏅", value: `${person.medals ?? 0}`, label: "メダル" },
             ].map((stat) => (
@@ -213,61 +198,6 @@ export default function TravellerPage({ params }: { params: Promise<{ uid: strin
           {action && <div className="mt-4">{action}</div>}
           {error && <p className="mt-2 text-xs font-bold text-[color:var(--brand-ink)]">{error}</p>}
         </div>
-      </div>
-
-      <div className="mt-6 rounded-[28px] border-2 border-[color:var(--line)] bg-[color:var(--surface)] p-5">
-        <div className="flex items-baseline justify-between">
-          <h2 className="text-sm font-black tracking-[0.18em] text-[color:var(--muted)]">制覇マップ</h2>
-          <span className="text-sm font-black tabular-nums">
-            {conquered.length}
-            <span className="text-xs text-[color:var(--muted)]">/47</span>
-          </span>
-        </div>
-        <div className="mx-auto mt-3 aspect-square w-full max-w-sm">
-          <ConquestMiniMap prefectureIds={conquered} accent={color} />
-        </div>
-      </div>
-
-      <div className="mt-6">
-        <h2 className="mb-3 text-sm font-black tracking-[0.18em] text-[color:var(--muted)]">最近の旅</h2>
-        {places.length === 0 ? (
-          <p className="rounded-[28px] border-2 border-dashed border-[color:var(--line)] p-6 text-center text-sm font-medium text-[color:var(--muted)]">
-            {hasStats
-              ? "まだ「行った」場所はないみたい。"
-              : "旅の記録はまだ公開されていません。本人がアプリを開くと表示されるよ。"}
-          </p>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2">
-            {places.map((place, index) => (
-              <li
-                key={`${place.name}-${index}`}
-                className="flex items-center gap-3 rounded-2xl border-2 border-b-4 border-[color:var(--line)] bg-[color:var(--surface)] p-2.5"
-              >
-                <span className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl">
-                  {place.imageUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={normalizePhotoUrl(place.imageUrl)}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <CategoryArt category={place.category ?? "nature"} className="h-full w-full" />
-                  )}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-black">{displayPlaceName(place.name)}</span>
-                  <span className="mt-0.5 flex items-center gap-1 text-[11px] font-bold text-[color:var(--muted)]">
-                    <MapPin size={11} />
-                    {prefectureName(place.prefectureId)}
-                    {place.at ? ` ・ ${visitLabel(place.at)}` : ""}
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
       </div>
     </section>
   );
